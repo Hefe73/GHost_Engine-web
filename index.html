@@ -1,0 +1,80 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GHost Engine</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="docs.html">Documentation</a>
+                    <a href="https://github.com/TU_USUARIO/ghost-engine" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <header>
+        <div class="logo-circle">
+            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                <path d="M32 4C19 4 10 14 10 26v26l7-6 7 6 7-6 7 6 7-6 7 6V26C52 14 45 4 32 4z" fill="white" />
+                <circle cx="24" cy="27" r="3.5" fill="#2a2a2a" />
+                <circle cx="40" cy="27" r="3.5" fill="#2a2a2a" />
+            </svg>
+        </div>
+        <h1>GHost Engine</h1>
+        <div class="header-divider"></div>
+        <p class="subtitle">Vulkan Graphics Engine</p>
+    </header>
+
+    <main>
+
+        <div class="post">
+            <h2><a href="posts/vulkan-init.html">Vulkan Initialization in GHost Engine</a></h2>
+            <p class="excerpt">Setting up the Vulkan instance, physical device selection and logical device creation.</p>
+            <p class="date">Posted on March 1, 2025</p>
+            <p class="read-more">Vulkan setup walkthrough <a href="posts/vulkan-init.html">[Read More]</a></p>
+            <p class="tags">Tags: <span>vulkan</span><span>initialization</span><span>device</span><span>instance</span></p>
+        </div>
+
+        <div class="post">
+            <h2><a href="posts/renderpass.html">Render Passes &amp; Framebuffers</a></h2>
+            <p class="excerpt">How GHost Engine structures render passes, subpasses and framebuffer attachments.</p>
+            <p class="date">Posted on February 15, 2025</p>
+            <p class="read-more">Render pipeline deep dive <a href="posts/renderpass.html">[Read More]</a></p>
+            <p class="tags">Tags: <span>renderpass</span><span>framebuffer</span><span>pipeline</span><span>vulkan</span></p>
+        </div>
+
+        <div class="post">
+            <h2><a href="posts/pbr.html">Physically Based Rendering in GHost Engine</a></h2>
+            <p class="excerpt">PBR implementation using metallic-roughness workflow under Vulkan.</p>
+            <p class="date">Posted on January 28, 2025</p>
+            <p class="read-more">PBR in Vulkan <a href="posts/pbr.html">[Read More]</a></p>
+            <p class="tags">Tags: <span>pbr</span><span>lighting</span><span>brdf</span><span>realistic</span></p>
+        </div>
+
+        <div class="post">
+            <h2><a href="posts/descriptors.html">Descriptor Sets &amp; Uniform Buffers</a></h2>
+            <p class="excerpt">Managing descriptor pools, layouts and binding resources efficiently in the engine.</p>
+            <p class="date">Posted on January 10, 2025</p>
+            <p class="read-more">Resource binding <a href="posts/descriptors.html">[Read More]</a></p>
+            <p class="tags">Tags: <span>descriptors</span><span>uniforms</span><span>vulkan</span><span>memory</span></p>
+        </div>
+
+    </main>
+
+    <footer>
+        <p>&copy; 2025 GHost Engine · Hugo Francés &amp; Guillermo Bosca · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

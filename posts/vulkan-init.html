@@ -1,0 +1,96 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vulkan Initialization – GHost Engine</title>
+    <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="../index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="../about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="../docs.html">Documentation</a>
+                    <a href="https://github.com/TU_USUARIO/ghost-engine" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="../contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <article>
+        <h1>Vulkan Initialization in GHost Engine</h1>
+        <p class="meta">Posted on March 1, 2025 · Tags: vulkan, initialization, device, instance</p>
+
+        <p>
+            The first step in any Vulkan-based engine is bootstrapping the API correctly.
+            GHost Engine handles this through a dedicated <code>VulkanContext</code> class
+            that encapsulates instance creation, physical device selection and logical device setup.
+        </p>
+
+        <h2>Creating the Instance</h2>
+        <p>
+            We request validation layers in debug builds and enumerate the required extensions
+            provided by the windowing system (via SDL2/GLFW).
+        </p>
+        <pre><code>VkApplicationInfo appInfo{};
+appInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+appInfo.pApplicationName   = "GHost Engine";
+appInfo.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
+appInfo.pEngineName        = "GHost";
+appInfo.apiVersion         = VK_API_VERSION_1_3;
+
+VkInstanceCreateInfo createInfo{};
+createInfo.sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+createInfo.pApplicationInfo = &appInfo;
+// ... extensions and layers
+vkCreateInstance(&createInfo, nullptr, &instance);</code></pre>
+
+        <h2>Physical Device Selection</h2>
+        <p>
+            GHost Engine scores each available GPU based on type (discrete &gt; integrated),
+            available queue families, and required feature support such as
+            <code>samplerAnisotropy</code> and geometry shaders.
+        </p>
+
+        <h2>Logical Device & Queues</h2>
+        <p>
+            We request separate queue families for graphics, compute and transfer operations
+            when available, enabling async compute passes later in the pipeline.
+        </p>
+        <pre><code>VkDeviceQueueCreateInfo queueCreateInfo{};
+queueCreateInfo.sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+queueCreateInfo.queueFamilyIndex = graphicsFamily;
+queueCreateInfo.queueCount       = 1;
+float priority = 1.0f;
+queueCreateInfo.pQueuePriorities = &priority;</code></pre>
+
+    </article>
+
+    <footer>
+        <p>&copy; 2025 GHost Engine · Hugo Francés &amp; Guillermo Bosca · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>
+```
+
+---
+
+## Estructura de carpetas recomendada
+```
+ghost-engine/          ← raíz del repo
+├── index.html
+├── style.css
+├── about.html
+├── contact.html
+└── posts/
+    ├── vulkan-init.html
+    ├── renderpass.html
+    ├── pbr.html
+    └── descriptors.html
