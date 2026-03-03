@@ -1,0 +1,81 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>About – GHost Engine</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="posts/vulkan-init.html">Documentation</a>
+                    <a href="https://github.com/TU_USUARIO/ghost-engine" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <div class="page-hero">
+        <h1>About Us</h1>
+        <div class="header-divider"></div>
+        <p>The people behind GHost Engine</p>
+    </div>
+
+    <div class="team-grid">
+        <div class="team-card">
+            <div class="team-avatar">HF</div>
+            <h3>Hugo Francés</h3>
+            <p>Graphics programmer. Handles the Vulkan backend, render pipeline and shader systems.</p>
+            <br />
+            <a href="https://github.com/TU_USUARIO" target="_blank">github.com/hugofranses</a>
+        </div>
+        <div class="team-card">
+            <div class="team-avatar">GB</div>
+            <h3>Guillermo Bosca</h3>
+            <p>Engine programmer. Responsible for the scene graph, memory management and tooling.</p>
+            <br />
+            <a href="https://github.com/TU_USUARIO2" target="_blank">github.com/guillebosca</a>
+        </div>
+    </div>
+
+    <div class="about-section">
+        <h2>What is GHost Engine?</h2>
+        <p>
+            GHost Engine is a custom real-time 3D graphics engine built from scratch in C++ using the
+            Vulkan API. It started as a learning project and has grown into a fully functional rendering
+            framework covering modern techniques used in production games and simulations.
+        </p>
+        <p>
+            The engine is open source and hosted on GitHub Pages, where we document our progress,
+            techniques and findings as we build it.
+        </p>
+
+        <h2>Features</h2>
+        <ul class="feature-list">
+            <li>Vulkan 1.3 backend</li>
+            <li>Physically Based Rendering</li>
+            <li>Deferred + Forward rendering</li>
+            <li>Image-Based Lighting</li>
+            <li>Shadow mapping (PCF)</li>
+            <li>glTF 2.0 asset loading</li>
+            <li>Async compute passes</li>
+            <li>Descriptor set caching</li>
+            <li>Hot-reload shaders</li>
+            <li>Custom memory allocator</li>
+        </ul>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 GHost Engine · Hugo Francés &amp; Guillermo Bosca · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

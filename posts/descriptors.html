@@ -1,0 +1,80 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Descriptor Sets – GHost Engine</title>
+    <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="../index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="../about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="vulkan-init.html">Documentation</a>
+                    <a href="https://github.com/TU_USUARIO/ghost-engine" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="../contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <article>
+        <h1>Descriptor Sets &amp; Uniform Buffers</h1>
+        <p class="meta">Posted on January 10, 2025 · Tags: descriptors · uniforms · vulkan · memory</p>
+
+        <p>
+            Descriptor sets are Vulkan's mechanism for binding resources — buffers, images, samplers —
+            to shaders. GHost Engine uses a simple descriptor allocator with a pool-per-frame
+            strategy to avoid per-frame allocation overhead.
+        </p>
+
+        <h2>Descriptor Pool</h2>
+        <p>
+            At startup we create a pool large enough for the expected maximum number of descriptor
+            sets per frame. We reset the entire pool at the start of each frame, which is faster
+            than freeing individual sets.
+        </p>
+        <pre><code>std::vector&lt;VkDescriptorPoolSize&gt; poolSizes = {
+    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         10 },
+    { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10 },
+};
+
+VkDescriptorPoolCreateInfo poolInfo{};
+poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+poolInfo.poolSizeCount = static_cast&lt;uint32_t&gt;(poolSizes.size());
+poolInfo.pPoolSizes    = poolSizes.data();
+poolInfo.maxSets       = 20;
+vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool);</code></pre>
+
+        <h2>Uniform Buffer Objects</h2>
+        <p>
+            Per-frame data (view/projection matrices, light positions, time) lives in a UBO
+            that is updated once per frame via a persistent mapped pointer, avoiding the
+            <code>vkMapMemory</code> / <code>vkUnmapMemory</code> round trip.
+        </p>
+        <pre><code>struct GlobalUBO {
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::vec4 cameraPos;
+    float     deltaTime;
+};</code></pre>
+
+        <h2>Layout &amp; Binding</h2>
+        <p>
+            Descriptor set layouts are created once and cached. At draw time we allocate a set
+            from the pool, write the buffer and image descriptors, and bind the set before each
+            draw call.
+        </p>
+    </article>
+
+    <footer>
+        <p>&copy; 2025 GHost Engine · <a href="../about.html">Hugo Francés &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

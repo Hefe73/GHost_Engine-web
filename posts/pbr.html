@@ -1,0 +1,77 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PBR – GHost Engine</title>
+    <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="../index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="../about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="vulkan-init.html">Documentation</a>
+                    <a href="https://github.com/TU_USUARIO/ghost-engine" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="../contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <article>
+        <h1>Physically Based Rendering in GHost Engine</h1>
+        <p class="meta">Posted on January 28, 2025 · Tags: pbr · lighting · brdf · realistic</p>
+
+        <p>
+            GHost Engine implements the metallic-roughness PBR workflow popularised by glTF 2.0.
+            The goal is to produce consistent, energy-conserving results under any lighting condition
+            using the Cook-Torrance BRDF.
+        </p>
+
+        <h2>The Cook-Torrance BRDF</h2>
+        <p>
+            The specular component is computed as:
+            <code>f = (D · F · G) / (4 · NdotV · NdotL)</code>,
+            where D is the normal distribution function (GGX/Trowbridge-Reitz),
+            F is the Fresnel term (Schlick approximation),
+            and G is the geometry/occlusion term (Smith-GGX).
+        </p>
+        <pre><code>// GGX Normal Distribution Function
+float D_GGX(float NdotH, float roughness) {
+    float a  = roughness * roughness;
+    float a2 = a * a;
+    float d  = (NdotH * NdotH) * (a2 - 1.0) + 1.0;
+    return a2 / (PI * d * d);
+}
+
+// Schlick Fresnel
+vec3 F_Schlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}</code></pre>
+
+        <h2>Material Inputs</h2>
+        <p>
+            Each material in the engine exposes four PBR parameters sampled from textures:
+            base color (albedo), metallic factor, roughness factor, and ambient occlusion.
+            These are packed into a UBO and bound via a descriptor set per material.
+        </p>
+
+        <h2>Image-Based Lighting</h2>
+        <p>
+            The indirect diffuse term uses an irradiance cubemap precomputed offline via
+            spherical harmonic projection. The specular term uses a pre-filtered environment
+            map combined with a BRDF LUT following the Epic split-sum approximation.
+        </p>
+    </article>
+
+    <footer>
+        <p>&copy; 2025 GHost Engine · <a href="../about.html">Hugo Francés &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

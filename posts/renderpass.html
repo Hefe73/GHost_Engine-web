@@ -1,0 +1,87 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Render Passes – GHost Engine</title>
+    <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="../index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="../about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="vulkan-init.html">Documentation</a>
+                    <a href="https://github.com/TU_USUARIO/ghost-engine" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="../contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <article>
+        <h1>Render Passes &amp; Framebuffers</h1>
+        <p class="meta">Posted on February 15, 2025 · Tags: renderpass · framebuffer · pipeline · vulkan</p>
+
+        <p>
+            In Vulkan, a render pass describes the set of images (attachments) used during rendering
+            and the operations performed on them. GHost Engine wraps this into a
+            <code>RenderPass</code> class that manages attachment descriptions, subpass dependencies
+            and framebuffer creation.
+        </p>
+
+        <h2>Attachments</h2>
+        <p>
+            A typical GHost Engine render pass uses three attachments: a color attachment in
+            <code>VK_FORMAT_B8G8R8A8_SRGB</code>, a depth/stencil attachment in
+            <code>VK_FORMAT_D32_SFLOAT</code>, and a resolve attachment for MSAA.
+        </p>
+        <pre><code>VkAttachmentDescription colorAttachment{};
+colorAttachment.format         = swapChainImageFormat;
+colorAttachment.samples        = msaaSamples;
+colorAttachment.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+colorAttachment.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+colorAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+colorAttachment.finalLayout    = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;</code></pre>
+
+        <h2>Subpass Dependencies</h2>
+        <p>
+            Subpass dependencies tell the driver when it is safe to transition between layouts.
+            We set up an external dependency so the swap chain image is fully available before
+            the color attachment stage writes to it.
+        </p>
+        <pre><code>VkSubpassDependency dependency{};
+dependency.srcSubpass    = VK_SUBPASS_EXTERNAL;
+dependency.dstSubpass    = 0;
+dependency.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                         | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+dependency.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                         | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                         | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;</code></pre>
+
+        <h2>Framebuffers</h2>
+        <p>
+            A framebuffer binds concrete <code>VkImageView</code> objects to the attachment slots
+            defined in the render pass. GHost Engine creates one framebuffer per swap chain image.
+        </p>
+        <pre><code>VkFramebufferCreateInfo framebufferInfo{};
+framebufferInfo.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+framebufferInfo.renderPass      = renderPass;
+framebufferInfo.attachmentCount = static_cast&lt;uint32_t&gt;(attachments.size());
+framebufferInfo.pAttachments    = attachments.data();
+framebufferInfo.width           = swapChainExtent.width;
+framebufferInfo.height          = swapChainExtent.height;
+framebufferInfo.layers          = 1;</code></pre>
+    </article>
+
+    <footer>
+        <p>&copy; 2025 GHost Engine · <a href="../about.html">Hugo Francés &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

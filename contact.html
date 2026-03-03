@@ -1,0 +1,66 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contact – GHost Engine</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="posts/vulkan-init.html">Documentation</a>
+                    <a href="https://github.com/TU_USUARIO/ghost-engine" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <div class="page-hero">
+        <h1>Contact Us</h1>
+        <div class="header-divider"></div>
+        <p>Questions, feedback or collaboration proposals</p>
+    </div>
+
+    <div class="contact-section">
+        <p>
+            Have a question about the engine, found a bug, or want to collaborate?
+            Drop us a message and we'll get back to you as soon as possible.
+            You can also open an issue directly on our
+            <a href="https://github.com/TU_USUARIO/ghost-engine" target="_blank" style="color:#555;border-bottom:1px solid #ddd;">GitHub repository</a>.
+        </p>
+
+        <form action="https://formspree.io/f/YOUR_FORM_ID" method="POST">
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" placeholder="Your name" required />
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" placeholder="your@email.com" required />
+            </div>
+            <div class="form-group">
+                <label for="subject">Subject</label>
+                <input type="text" id="subject" name="subject" placeholder="What's this about?" />
+            </div>
+            <div class="form-group">
+                <label for="message">Message</label>
+                <textarea id="message" name="message" placeholder="Your message..." required></textarea>
+            </div>
+            <button type="submit" class="btn">Send Message</button>
+        </form>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 GHost Engine · Hugo Francés &amp; Guillermo Bosca · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>
