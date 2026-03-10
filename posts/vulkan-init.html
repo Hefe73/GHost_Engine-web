@@ -24,12 +24,12 @@
     </nav>
 
     <article>
-        <h1>Vulkan Initialization in GHost Engine</h1>
-        <p class="meta">Posted on March 1, 2025 · Tags: vulkan · initialization · device · instance</p>
+        <h1>Initialization in GHost Engine</h1>
+        <p class="meta">Posted on March 2, 2026 · Tags: initialization · device · instance</p>
 
         <p>
-            The first step in any Vulkan-based engine is bootstrapping the API correctly.
-            GHost Engine handles this through a dedicated <code>VulkanContext</code> class
+            The first step in GHost Engine is bootstrapping the API correctly.
+            GHost Engine handles this through a dedicated class <code>GHostEngine</code>
             that encapsulates instance creation, physical device selection and logical device setup.
         </p>
 
@@ -38,17 +38,9 @@
             We request validation layers in debug builds and enumerate the required extensions
             provided by the windowing system.
         </p>
-        <pre><code>VkApplicationInfo appInfo{};
-appInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-appInfo.pApplicationName   = "GHost Engine";
-appInfo.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
-appInfo.pEngineName        = "GHost";
-appInfo.apiVersion         = VK_API_VERSION_1_3;
-
-VkInstanceCreateInfo createInfo{};
-createInfo.sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-createInfo.pApplicationInfo = &appInfo;
-vkCreateInstance(&createInfo, nullptr, &instance);</code></pre>
+        <pre><code>
+            gh::GHostEngine ghost("WOW");
+        </code></pre>
 
         <h2>Physical Device Selection</h2>
         <p>
