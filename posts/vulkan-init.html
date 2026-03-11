@@ -24,42 +24,389 @@
     </nav>
 
     <article>
-        <h1>Initialization in GHost Engine</h1>
-        <p class="meta">Posted on March 2, 2026 · Tags: initialization · device · instance</p>
+        <h1>Building a Default Demo in GHost Engine</h1>
+        <p class="meta">Posted on March 11, 2026 · Tags: demo · initialization · setup · rendering</p>
 
         <p>
-            The first step in GHost Engine is bootstrapping the API correctly.
-            GHost Engine handles this through a dedicated class <code>GHostEngine</code>
-            that encapsulates instance creation, physical device selection and logical device setup.
+            In this guide, we'll walk through building a complete default demo for GHost Engine step-by-step.
+            You'll learn how to initialize the engine, load assets asynchronously, create game objects,
+            and render them with a camera you can control.
         </p>
 
-        <h2>Creating the Instance</h2>
+        <h2>Step 1: Include Required Headers</h2>
         <p>
-            We request validation layers in debug builds and enumerate the required extensions
-            provided by the windowing system.
+            Start by including all the necessary headers for your demo. The headers provide access to
+            the engine core, models, rendering, and input systems.
         </p>
         <pre><code>
-            gh::GHostEngine ghost("WOW");
+#pragma once
+#include "ghost.h"
+#include "gh_model.hpp"
+#include "gh_game_object.hpp"
+#include "gh_job_system.hpp"
+#include "gh_buffer.hpp"
+#include "simple_render_system.hpp"
+#include "gh_movement_controller.hpp"
         </code></pre>
 
-        <h2>Physical Device Selection</h2>
+        <h2>Step 2: Initialize Logging and Create the Engine</h2>
         <p>
-            GHost Engine scores each available GPU based on type (discrete > integrated),
-            available queue families, and required feature support such as
-            <code>samplerAnisotropy</code> and geometry shaders.
+            Initialize the logging system and create a <code>GHostEngine</code> instance. This handles
+            Vulkan instance creation, physical device selection, and logical device setup automatically.
         </p>
+        <pre><code>
+void main()
+{
+    gh::Log::Init();
 
-        <h2>Logical Device &amp; Queues</h2>
+    gh::GHostEngine ghost("WOW");
+        </code></pre>
+
+        <h2>Step 3: Define the Global Uniform Buffer Object</h2>
         <p>
-            We request separate queue families for graphics, compute and transfer operations
-            when available, enabling async compute passes later in the pipeline.
+            Create a struct to hold data that's passed to shaders each frame. This includes the combined
+            projection-view matrix and lighting information.
         </p>
-        <pre><code>VkDeviceQueueCreateInfo queueCreateInfo{};
-queueCreateInfo.sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-queueCreateInfo.queueCount       = 1;
-float priority = 1.0f;
-queueCreateInfo.pQueuePriorities = &priority;</code></pre>
+        <pre><code>
+    struct GlobalUbo
+    {
+        glm::mat4 projectionView{1.f};
+        glm::vec3 lightDirection = 
+            glm::normalize(glm::vec3{1.f, -3.f, -1.f});
+    };
+        </code></pre>
+
+        <h2>Step 4: Load Meshes Asynchronously with Job System</h2>
+        <p>
+            Create a job system with 8 workers. This allows you to load multiple 3D models in parallel
+            without blocking the main thread. Use <code>enqueue()</code> to submit loading jobs and
+            <code>.get()</code> to retrieve the results.
+        </p>
+        <pre><code>
+    gh::GHJobSystem js{8};
+    auto devicePtr = &ghost.getDevice();
+
+    // Load first mesh asynchronously
+    auto fut = js.enqueue([devicePtr]() -> std::shared_ptr&lt;gh::GHModel&gt;
+    {
+        return gh::GHModel::createModelFromFile(*devicePtr, "shaders/Mesh.obj");
+    });
+    std::shared_ptr&lt;gh::GHModel&gt; coloredCube = fut.get();
+
+    // Load second mesh
+    auto fut1 = js.enqueue([devicePtr]() -> std::shared_ptr&lt;gh::GHModel&gt;
+    {
+        return gh::GHModel::createModelFromFile(*devicePtr, "shaders/cube.obj");
+    });
+    std::shared_ptr&lt;gh::GHModel&gt; whiteCube = fut1.get();
+
+    // Load third mesh
+    auto fut2 = js.enqueue([devicePtr]() -> std::shared_ptr&lt;gh::GHModel&gt;
+    {
+        return gh::GHModel::createModelFromFile(*devicePtr, "shaders/ghost.fbx");
+    });
+    std::shared_ptr&lt;gh::GHModel&gt; colorModel = fut2.get();
+        </code></pre>
+
+        <h2>Step 5: Create Game Objects from Loaded Models</h2>
+        <p>
+            Create game objects for each loaded mesh and add them to the scene. Game objects combine
+            a model with transform data (position, rotation, scale).
+        </p>
+        <pre><code>
+    // Create floor
+    auto floor = gh::GHGameObject::createGameObject();
+    floor.model = whiteCube;
+    floor.transform.translation = {0.f, 2.f, 0.f};
+    floor.transform.scale = {20.f, 1.0f, 20.f};
+    ghost.getGameObjects().push_back(std::move(floor));
+        </code></pre>
+
+        <h2>Step 6: Setup Rendering Infrastructure</h2>
+        <p>
+            Create the necessary Vulkan resources for rendering: uniform buffers, descriptor layouts,
+            and descriptor sets. These connect your data to the GPU.
+        </p>
+        <pre><code>
+    std::vector&lt;std::unique_ptr&lt;gh::GHBuffer&gt;&gt; uboBuffers(
+        gh::GHSwapChain::MAX_FRAMES_IN_FLIGHT
+    );
+    ghost.buildBuffers(uboBuffers);
+
+    auto globalSetLayout =
+        gh::GHDescriptorSetLayout::Builder(ghost.getDevice())
+        .addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+                    VK_SHADER_STAGE_VERTEX_BIT)
+        .build();
+
+    std::vector&lt;VkDescriptorSet&gt; globalDescriptorSets(
+        gh::GHSwapChain::MAX_FRAMES_IN_FLIGHT
+    );
+    ghost.buildGlobalDescritorsSets(
+        globalDescriptorSets, 
+        uboBuffers, 
+        globalSetLayout
+    );
+
+    gh::SimpleRenderSystem simpleRenderSystem{
+        ghost.getDevice(),
+        ghost.getRenderer().getSwapChainRenderPass(),
+        globalSetLayout->getDescriptorSetLayout()
+    };
+        </code></pre>
+
+        <h2>Step 7: Setup Camera and Input Controller</h2>
+        <p>
+            Create a camera object and position it. Then create a controller to handle keyboard input
+            for free-flight camera movement.
+        </p>
+        <pre><code>
+    gh::GHCamera camera{};
+    auto viewerObject = gh::GHGameObject::createGameObject();
+    viewerObject.transform.translation = {0.0f, -5.0f, 0.0f};
+    viewerObject.transform.rotation = {0.0f, 0.0f, 0.0f};
+    
+    gh::KeyboardMovementController cameraController{};
+        </code></pre>
+
+        <h2>Step 8: Enter the Main Render Loop</h2>
+        <p>
+            The main loop runs until the window closes. Each iteration polls input, updates the camera,
+            and renders a frame.
+        </p>
+        <pre><code>
+    auto currentTime = std::chrono::high_resolution_clock::now();
+
+    while (!ghost.getWindow().shouldClose())
+    {
+        glfwPollEvents();
+
+        auto newTime = std::chrono::high_resolution_clock::now();
+        float frameTime = 
+            std::chrono::duration&lt;float, std::chrono::seconds::period&gt;
+            (newTime - currentTime).count();
+        currentTime = newTime;
+        </code></pre>
+
+        <h2>Step 9: Update Camera and Input Handling</h2>
+        <p>
+            Get the window size and update the camera using the controller. This processes keyboard input
+            to move and rotate the camera.
+        </p>
+        <pre><code>
+        int width, height;
+        glfwGetWindowSize(ghost.getWindow().getGLFWwindow(), 
+                         &width, &height);
+
+        cameraController.flycam(
+            ghost.getWindow().getGLFWwindow(), 
+            frameTime, 
+            viewerObject, 
+            width, 
+            height
+        );
+
+        camera.getView() = glm::lookAt(
+            viewerObject.transform.translation,
+            viewerObject.transform.translation + 
+            viewerObject.transform.rotation,
+            {0.0f, 1.0f, 0.0f}
+        );
+        </code></pre>
+
+        <h2>Step 10: Setup Camera Projection</h2>
+        <p>
+            Configure the projection matrix with a 90-degree field of view, the window's aspect ratio,
+            and clipping planes.
+        </p>
+        <pre><code>
+        float aspect = ghost.getRenderer().getAspectRatio();
+        camera.setPerspectiveProjection(
+            glm::radians(90.f), 
+            aspect, 
+            0.1f, 
+            10000.f
+        );
+        </code></pre>
+
+        <h2>Step 11: Begin Frame and Setup Frame Info</h2>
+        <p>
+            Start a new frame with the renderer. If successful (buffer acquired), prepare the frame info
+            structure that will be passed to the render system.
+        </p>
+        <pre><code>
+        if (auto commandBuffer = ghost.getRenderer().beginFrame())
+        {
+            int frameIndex = ghost.getRenderer().getFrameIndex();
+            gh::FrameInfo frameInfo{
+                frameIndex,
+                frameTime,
+                commandBuffer,
+                camera,
+                globalDescriptorSets[frameIndex]
+            };
+        </code></pre>
+
+        <h2>Step 12: Update Uniform Buffer Data</h2>
+        <p>
+            Calculate the combined projection-view matrix and write it to the uniform buffer. This matrix
+            transforms vertices from world space to screen space.
+        </p>
+        <pre><code>
+            GlobalUbo ubo{};
+            ubo.projectionView = camera.getProjection() * camera.getView();
+            uboBuffers[frameIndex]->writeToBuffer(&ubo);
+            uboBuffers[frameIndex]->flush();
+        </code></pre>
+
+        <h2>Step 13: Render Game Objects</h2>
+        <p>
+            Record and execute render commands. Begin the render pass, render all game objects,
+            then end the render pass and submit the frame.
+        </p>
+        <pre><code>
+            ghost.getRenderer().beginSwapChainRenderPass(commandBuffer);
+            simpleRenderSystem.renderGameObjects(
+                frameInfo, 
+                ghost.getGameObjects()
+            );
+            ghost.getRenderer().endSwapChainRenderPass(commandBuffer);
+            ghost.getRenderer().endFrame();
+        }
+        </code></pre>
+
+        <h2>Step 14: Cleanup</h2>
+        <p>
+            After the main loop exits, wait for the device to finish all pending work before releasing resources.
+        </p>
+        <pre><code>
+    vkDeviceWaitIdle(ghost.getDevice().device());
+}
+        </code></pre>
+
+        <h2>Complete Example</h2>
+        <p>
+            Here's the full main() function bringing all steps together:
+        </p>
+        <pre><code>
+void main()
+{
+    gh::Log::Init();
+
+    struct GlobalUbo {
+        glm::mat4 projectionView{1.f};
+        glm::vec3 lightDirection = 
+            glm::normalize(glm::vec3{1.f, -3.f, -1.f});
+    };
+
+    gh::GHostEngine ghost("WOW");
+    gh::GHJobSystem js{8};
+    auto devicePtr = &ghost.getDevice();
+
+    // Load meshes
+    auto fut = js.enqueue([devicePtr]() -> std::shared_ptr&lt;gh::GHModel&gt; {
+        return gh::GHModel::createModelFromFile(*devicePtr, "shaders/Mesh.obj");
+    });
+    auto coloredCube = fut.get();
+
+    auto fut1 = js.enqueue([devicePtr]() -> std::shared_ptr&lt;gh::GHModel&gt; {
+        return gh::GHModel::createModelFromFile(*devicePtr, "shaders/cube.obj");
+    });
+    auto whiteCube = fut1.get();
+
+    // Create floor
+    auto floor = gh::GHGameObject::createGameObject();
+    floor.model = whiteCube;
+    floor.transform.translation = {0.f, 2.f, 0.f};
+    floor.transform.scale = {20.f, 1.0f, 20.f};
+    ghost.getGameObjects().push_back(std::move(floor));
+
+    // Setup rendering
+    std::vector&lt;std::unique_ptr&lt;gh::GHBuffer&gt;&gt; uboBuffers(
+        gh::GHSwapChain::MAX_FRAMES_IN_FLIGHT
+    );
+    ghost.buildBuffers(uboBuffers);
+
+    auto globalSetLayout =
+        gh::GHDescriptorSetLayout::Builder(ghost.getDevice())
+        .addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+                    VK_SHADER_STAGE_VERTEX_BIT)
+        .build();
+
+    std::vector&lt;VkDescriptorSet&gt; globalDescriptorSets(
+        gh::GHSwapChain::MAX_FRAMES_IN_FLIGHT
+    );
+    ghost.buildGlobalDescritorsSets(
+        globalDescriptorSets, uboBuffers, globalSetLayout
+    );
+
+    gh::SimpleRenderSystem simpleRenderSystem{
+        ghost.getDevice(),
+        ghost.getRenderer().getSwapChainRenderPass(),
+        globalSetLayout->getDescriptorSetLayout()
+    };
+
+    // Setup camera
+    gh::GHCamera camera{};
+    auto viewerObject = gh::GHGameObject::createGameObject();
+    viewerObject.transform.translation = {0.0f, -5.0f, 0.0f};
+    gh::KeyboardMovementController cameraController{};
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+
+    while (!ghost.getWindow().shouldClose()) {
+        glfwPollEvents();
+
+        auto newTime = std::chrono::high_resolution_clock::now();
+        float frameTime = 
+            std::chrono::duration&lt;float, std::chrono::seconds::period&gt;
+            (newTime - currentTime).count();
+        currentTime = newTime;
+
+        int width, height;
+        glfwGetWindowSize(ghost.getWindow().getGLFWwindow(), &width, &height);
+
+        cameraController.flycam(ghost.getWindow().getGLFWwindow(), 
+                                frameTime, viewerObject, width, height);
+        camera.getView() = glm::lookAt(
+            viewerObject.transform.translation,
+            viewerObject.transform.translation + viewerObject.transform.rotation,
+            {0.0f, 1.0f, 0.0f}
+        );
+
+        float aspect = ghost.getRenderer().getAspectRatio();
+        camera.setPerspectiveProjection(glm::radians(90.f), aspect, 0.1f, 10000.f);
+
+        if (auto commandBuffer = ghost.getRenderer().beginFrame()) {
+            int frameIndex = ghost.getRenderer().getFrameIndex();
+            gh::FrameInfo frameInfo{frameIndex, frameTime, commandBuffer, 
+                                    camera, globalDescriptorSets[frameIndex]};
+
+            GlobalUbo ubo{};
+            ubo.projectionView = camera.getProjection() * camera.getView();
+            uboBuffers[frameIndex]->writeToBuffer(&ubo);
+            uboBuffers[frameIndex]->flush();
+
+            ghost.getRenderer().beginSwapChainRenderPass(commandBuffer);
+            simpleRenderSystem.renderGameObjects(frameInfo, ghost.getGameObjects());
+            ghost.getRenderer().endSwapChainRenderPass(commandBuffer);
+            ghost.getRenderer().endFrame();
+        }
+    }
+
+    vkDeviceWaitIdle(ghost.getDevice().device());
+}
+        </code></pre>
+
+        <h2>Key Takeaways</h2>
+        <ul>
+            <li><strong>Job System:</strong> Use it to load assets in parallel without blocking rendering</li>
+            <li><strong>Game Objects:</strong> Combine models with transforms to represent entities in your scene</li>
+            <li><strong>Uniform Buffers:</strong> Send per-frame data like matrices to your shaders</li>
+            <li><strong>Frame Loop:</strong> Poll input, update state, and render each frame</li>
+            <li><strong>Camera Control:</strong> Use the built-in controller for intuitive navigation</li>
+        </ul>
+
     </article>
 
     <footer>
