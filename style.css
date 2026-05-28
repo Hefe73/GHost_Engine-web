@@ -720,6 +720,66 @@ footer {
         }
 
 /* ────────────────────────────────────
+   IMAGE PLACEHOLDER
+──────────────────────────────────── */
+.img-placeholder {
+    width: 100%;
+    background: #e8e8e8;
+    border: 2px dashed #bbb;
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2.5rem 1rem;
+    margin: 1.5rem 0;
+    color: #999;
+    font-family: 'Arial', sans-serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    text-align: center;
+    min-height: 220px;
+}
+
+    .img-placeholder .ph-icon {
+        font-size: 2.2rem;
+        opacity: 0.45;
+    }
+
+    .img-placeholder strong {
+        display: block;
+        font-size: 0.9rem;
+        color: #888;
+        margin-bottom: 0.2rem;
+    }
+
+.img-placeholder-sm {
+    min-height: 140px;
+}
+
+/* Goals completed items */
+.goals-list li.done {
+    color: #aaa;
+    text-decoration: line-through;
+}
+
+    .goals-list li.done:before {
+        content: '✓';
+        color: #b5d5b5;
+    }
+
+.goals-list-label {
+    font-family: 'Arial', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #bbb;
+    margin: 0.8rem 0 0.3rem;
+}
+
+/* ────────────────────────────────────
    RESPONSIVE
 ──────────────────────────────────── */
 @media (max-width: 600px) {

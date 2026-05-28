@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LOD Streaming – GHost Engine</title>
+    <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="../index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="../about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Posts ▾</a>
+                <div class="dropdown-menu">
+                    <a href="lua-scripting.html">Lua Scripting</a>
+                    <a href="terrain.html">Procedural Terrain</a>
+                    <a href="lod-streaming.html">LOD &amp; Streaming</a>
+                    <a href="hdr-tonemapping.html">HDR &amp; Tonemapping</a>
+                    <a href="csm.html">Cascaded Shadow Maps</a>
+                    <a href="deferred-rendering.html">Deferred Rendering</a>
+                    <a href="ecs.html">ECS Architecture</a>
+                </div>
+            </li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="https://github.com/boscab/3PMG_2526_boscaba_franceshe" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="../contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <article>
+        <h1>LOD Streaming &amp; Frustum Culling</h1>
+        <p class="meta">Posted on May 10, 2026 &middot; Tags: lod &middot; streaming &middot; frustum &middot; performance &middot; vulkan</p>
+
+        <p>
+            Keeping frame time under 16 ms in complex scenes requires more than a fast renderer —
+            it requires <em>not rendering things that don't matter</em>. GHost Engine combines two
+            orthogonal strategies: <strong>frustum culling</strong> skips entities that are off screen
+            entirely, and <strong>LOD streaming</strong> reduces texture resolution for distant objects
+            that are on screen but too small to warrant full-quality assets.
+        </p>
+
+        <h2>The gh_streaming Configuration</h2>
+        <p>
+            Streaming is configured through <code>gh_streaming</code>, which holds a vector of
+            distance-band descriptors (<code>lod</code> structs) and a global config:
+        </p>
+        <pre><code>// From gh_streaming.h
+struct lod {
+    float distance    = 10.0f; // far boundary of this band (world units)
+    int   texture_mip_level = 0;  // mip bias — 0 = full resolution
+    int   mesh_lod_level    = 0;  // reserved for future mesh simplification
+};
+
+// Default 5-band configuration:
+// Band 0: [  0, 10) → mip 0  (full resolution)
+// Band 1: [ 10, 30) → mip 1  (half resolution)
+// Band 2: [ 30, 80) → mip 2  (quarter resolution)
+// Band 3: [80, 200) → mip 3
+// Band 4: [200, ∞ ) → mip 4  (culled if limit_render_distance_by_lod = true)</code></pre>
+
+        <h2>Frustum Culling</h2>
+        <p>
+            Six frustum planes are extracted from the view-projection matrix each frame using the
+            Gribb-Hartmann method. Each plane is then normalised:
+        </p>
+        <pre><code>// Extract the 6 frustum planes from VP (column-major GLM matrix)
+static Frustum extractFrustum(const glm::mat4&amp; vp) {
+    Frustum f;
+    f.planes[0] = vp[3] + vp[0]; // left
+    f.planes[1] = vp[3] - vp[0]; // right
+    f.planes[2] = vp[3] + vp[1]; // bottom
+    f.planes[3] = vp[3] - vp[1]; // top
+    f.planes[4] = vp[3] + vp[2]; // near
+    f.planes[5] = vp[3] - vp[2]; // far
+
+    // Normalise each plane (divide by XYZ length)
+    for (auto&amp; p : f.planes) {
+        float len = glm::length(glm::vec3(p));
+        p /= len;
+    }
+    return f;
+}</code></pre>
+        <p>
+            An entity's world-space AABB is tested against all six planes. Rejection happens on the
+            first plane where the AABB's <em>positive vertex</em> (the corner most in the plane's
+            positive half-space) is behind the plane:
+        </p>
+        <pre><code>static bool aabbInFrustum(const Frustum&amp; f,
+                           const GHModel::AABB&amp; local,
+                           const glm::mat4&amp; worldMat) {
+    // Transform AABB corners to world space
+    // ...
+    for (int i = 0; i &lt; 6; ++i) {
+        glm::vec3 n = glm::vec3(f.planes[i]);
+        float d = f.planes[i].w;
+        // Positive-vertex test: take the corner most aligned with the plane normal
+        glm::vec3 pv = worldMin;
+        if (n.x &gt;= 0) pv.x = worldMax.x;
+        if (n.y &gt;= 0) pv.y = worldMax.y;
+        if (n.z &gt;= 0) pv.z = worldMax.z;
+        if (glm::dot(n, pv) + d &lt; 0.0f) return false; // fully outside
+    }
+    return true;
+}</code></pre>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Frustum culling visualisation</strong>
+            Top-down view of the scene: the camera frustum drawn as a trapezoid,
+            green entities inside are rendered, red entities outside are culled and shown as wireframe only.
+        </div>
+
+        <h2>The Priority Multiplier System</h2>
+        <p>
+            A fixed LOD distance (e.g. switch to mip 1 at 10 m) treats a 0.5 m rock and a 30 m
+            building identically, even though the building is still visually large at 10 m. The
+            priority system fixes this by scaling the distance thresholds per entity based on its
+            AABB diagonal:
+        </p>
+        <pre><code>// Auto-priority: derived from mesh AABB diagonal
+float multiplier = clamp(
+    aabb_diagonal / priority_reference_size, // reference = 5 m by default
+    priority_min_multiplier,  // 0.25
+    priority_max_multiplier   // 4.0
+);
+
+// Effective distance for LOD evaluation:
+float effectiveDist = distance / multiplier;
+
+// Example:
+// 30 m building (diagonal ~37 m): multiplier = min(37/5, 4.0) = 4.0
+//   → switches to mip 1 at 40 m instead of 10 m
+// 0.5 m rock (diagonal ~0.7 m):  multiplier = max(0.7/5, 0.25) = 0.25
+//   → switches to mip 1 at 2.5 m instead of 10 m</code></pre>
+        <p>
+            Manual override presets are also available per entity:
+            <code>StreamingPriority::High</code> (×3.0),
+            <code>StreamingPriority::Normal</code> (×1.0),
+            <code>StreamingPriority::Low</code> (×0.4).
+        </p>
+
+        <h2>Per-Entity Streaming State</h2>
+        <p>
+            The renderer caches per-entity streaming data in an
+            <code>unordered_map&lt;uint32_t, EntityStreamingState&gt;</code>:
+        </p>
+        <pre><code>struct EntityStreamingState {
+    float lodBias       = 0.0f;   // current texture mip bias
+    bool  lodVisible    = false;  // passed frustum test?
+    int   activeLOD     = 0;      // current band index
+    float lastDistance  = 0.0f;  // last evaluated distance
+    float priorityMultiplier = 1.0f;
+    bool  priorityReady = false;  // multiplier initialised from mesh AABB?
+};</code></pre>
+
+        <h2>Update Interval</h2>
+        <p>
+            LOD re-evaluation runs every <code>updateInterval = 0.1 s</code> (10 times per second),
+            not every frame. The timer accumulates <code>dt</code>; when it exceeds the interval,
+            all entity states are updated and the timer resets. This avoids spending per-entity
+            frustum and distance calculations (which can be non-trivial for large scenes) on every
+            single frame.
+        </p>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: LOD streaming editor panel</strong>
+            ImGui panel showing the 5 LOD bands with editable distance and mip level fields,
+            the priority reference size slider, and per-entity priority override dropdown.
+        </div>
+
+        <h2>Streaming Config Flags</h2>
+        <pre><code>struct StreamingConfig {
+    bool is_streaming               = true;
+    bool frustum_culling            = true;
+    bool streaming_on_play_camera   = true;
+    bool streaming_on_editor        = false; // culling disabled in editor by default
+    bool disable_frustum_culling_on_editor = true;
+    bool limit_render_distance_by_lod      = true; // cull beyond last LOD band
+    bool priority_auto_enabled      = true;
+    float priority_reference_size   = 5.0f;
+    uint32_t anisotropic_filtering_level = 2; // 1=off, 2=x4, 3=x16
+};</code></pre>
+
+        <h2>VRAM Pressure</h2>
+        <p>
+            If VRAM usage exceeds <code>vramPressureThreshold</code> (75% by default), the streaming
+            system narrows its hysteresis window — reducing how many LOD levels stay resident in GPU
+            memory simultaneously from 3 to 2. This provides a safety valve against VRAM exhaustion
+            in scenes with unusually large or numerous texture assets.
+        </p>
+    </article>
+
+    <footer>
+        <p>&copy; 2026 GHost Engine · <a href="../about.html">Hugo Franc&eacute;s &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

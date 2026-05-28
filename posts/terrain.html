@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Procedural Terrain – GHost Engine</title>
+    <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="../index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="../about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Posts ▾</a>
+                <div class="dropdown-menu">
+                    <a href="lua-scripting.html">Lua Scripting</a>
+                    <a href="terrain.html">Procedural Terrain</a>
+                    <a href="lod-streaming.html">LOD &amp; Streaming</a>
+                    <a href="hdr-tonemapping.html">HDR &amp; Tonemapping</a>
+                    <a href="csm.html">Cascaded Shadow Maps</a>
+                    <a href="deferred-rendering.html">Deferred Rendering</a>
+                    <a href="ecs.html">ECS Architecture</a>
+                </div>
+            </li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="https://github.com/boscab/3PMG_2526_boscaba_franceshe" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="../contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <article>
+        <h1>Procedural Terrain: fBm, Erosion &amp; Vegetation</h1>
+        <p class="meta">Posted on May 15, 2026 &middot; Tags: terrain &middot; procedural &middot; noise &middot; erosion &middot; vegetation</p>
+
+        <p>
+            GHost Engine's terrain system generates an infinite chunked landscape entirely at runtime —
+            no heightmap file required. Artists control the appearance through noise parameters,
+            erosion settings, and vegetation density, all adjustable live in the editor. The
+            generation pipeline has five stages: domain warp, fBm accumulation, ridge blending,
+            power curve, and erosion simulation.
+        </p>
+
+        <h2>Chunked Grid Architecture</h2>
+        <p>
+            The terrain is divided into square chunks. Each chunk is an independent <code>GHModel</code>
+            with vertex positions computed from a deterministic height function. Resolution
+            scales with LOD level: LOD 0 uses 64 vertices per side, LOD 1 uses 32, LOD 2 uses 16,
+            and LOD 3 uses 8. Chunk edges are designed to align at all LOD levels so seams never
+            appear between adjacent chunks.
+        </p>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Terrain chunk grid from above</strong>
+            Top-down wireframe view showing the grid of chunks.
+            Centre chunks at full LOD resolution (64×64 vertices);
+            outer rings progressively coarser (32, 16, 8).
+        </div>
+
+        <h2>Stage 1 — Domain Warp</h2>
+        <p>
+            Before evaluating the main noise, the sample position <code>(x, z)</code> is offset by
+            a secondary noise field. This "warps" the coordinates, breaking the grid regularity
+            that makes noise functions look artificial:
+        </p>
+        <pre><code>// Domain warp: displace the sample point before main noise evaluation
+glm::vec2 warpOffset = glm::vec2(
+    stb_perlin_noise3(x * warpFreq, z * warpFreq, 0.0f, 0, 0, 0),
+    stb_perlin_noise3(x * warpFreq, z * warpFreq, 5.2f, 0, 0, 0)
+) * warpStrength;
+
+float sx = x + warpOffset.x;
+float sz = z + warpOffset.y;
+// Use (sx, sz) for fBm evaluation instead of (x, z)</code></pre>
+
+        <h2>Stage 2 — Fractional Brownian Motion (fBm)</h2>
+        <p>
+            Six octaves of Perlin noise are summed, each at double the frequency and half the
+            amplitude of the previous. Low-frequency octaves create large hills and valleys;
+            high-frequency octaves add surface roughness and fine detail:
+        </p>
+        <pre><code>float fbm(float x, float z, int octaves, float lacunarity, float gain) {
+    float value     = 0.0f;
+    float amplitude = 1.0f;
+    float frequency = 1.0f;
+    for (int i = 0; i &lt; octaves; ++i) {
+        value     += amplitude * stb_perlin_noise3(x * frequency,
+                                                    z * frequency,
+                                                    0.0f, 0, 0, 0);
+        amplitude *= gain;       // default 0.5 (each octave half as loud)
+        frequency *= lacunarity; // default 2.0 (each octave twice as detailed)
+    }
+    return value;
+}
+// Called with octaves=6, lacunarity=2.0, gain=0.5</code></pre>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: fBm terrain progression — 1, 2, 4, 6 octaves</strong>
+            Four terrain renders side by side showing how each additional octave adds smaller-scale
+            surface detail on top of the broad hills from earlier octaves.
+        </div>
+
+        <h2>Stage 3 — Ridge Blending</h2>
+        <p>
+            When <code>ridge_blend &gt; 0</code>, the absolute value of the noise is mixed into the
+            result. <code>|noise|</code> is zero at noise-crossings and non-zero elsewhere, which
+            inverts the terrain into sharp V-shaped valleys and mountain ridges:
+        </p>
+        <pre><code>// Ridge blend: produces sharp ridges and valleys
+float h = fbm(sx, sz, 6, 2.0f, 0.5f);
+if (ridgeBlend &gt; 0.0f) {
+    float ridge = 1.0f - std::abs(h); // invert: peaks where |noise|=0
+    ridge = std::pow(ridge, ridgePower);
+    h = glm::mix(h, ridge, ridgeBlend);
+}</code></pre>
+
+        <h2>Stage 4 — Power Curve &amp; Scale</h2>
+        <p>
+            A power function controls the distribution of flat plains versus steep mountains.
+            A power &gt; 1 pushes heights toward extremes (dramatic peaks and flat valleys).
+            Finally, <code>heightMultiplier</code> converts the normalised [0,1] value to world units:
+        </p>
+        <pre><code>// Normalise to [0,1] then apply power curve
+float normalized = (h + 1.0f) * 0.5f;           // remap [-1,1] → [0,1]
+float powered    = std::pow(normalized, power);  // redistribute
+float worldHeight = powered * heightMultiplier;  // scale to world units</code></pre>
+
+        <h2>Stage 5 — Hydraulic Erosion</h2>
+        <p>
+            After the base heightmap is generated, a particle-based hydraulic erosion simulation
+            runs for 50,000 iterations (configurable). Each virtual water droplet:
+        </p>
+        <ol style="margin:0 0 1.3rem 1.5rem;line-height:1.8;color:#444;">
+            <li>Starts at a random position on the heightmap.</li>
+            <li>Follows the steepest downhill gradient, accelerating with slope.</li>
+            <li>Picks up sediment proportional to its speed and flow capacity.</li>
+            <li>Deposits sediment where it slows down (flat areas, valley floors).</li>
+            <li>Evaporates after a fixed number of steps.</li>
+        </ol>
+        <p>
+            After many iterations, V-shaped valleys erode into the terrain and alluvial fans
+            accumulate at the base of slopes — closely matching real geological formations.
+        </p>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Terrain before and after hydraulic erosion</strong>
+            Left: raw fBm terrain — smooth, rounded hills with no directional features.
+            Right: after 50,000 erosion iterations — channels, ridges, and sediment fans visible.
+        </div>
+
+        <pre><code>// Erosion droplet step (simplified)
+struct Droplet { glm::vec2 pos, vel; float sediment, water; };
+
+for (int i = 0; i &lt; erosionIterations; ++i) {
+    Droplet d{ randomPos(), {0,0}, 0.0f, 1.0f };
+    for (int step = 0; step &lt; maxSteps; ++step) {
+        glm::vec2 grad   = gradient(heightmap, d.pos);
+        d.vel            = d.vel * inertia - grad * (1.0f - inertia);
+        float speed      = glm::length(d.vel);
+        float capacity   = std::max(speed * d.water * sedimentCapacity,
+                                    minCapacity);
+        // Erode or deposit
+        if (d.sediment &gt; capacity) {
+            float deposit = (d.sediment - capacity) * depositSpeed;
+            heightmap[d.pos] += deposit;
+            d.sediment       -= deposit;
+        } else {
+            float erode = std::min((capacity - d.sediment) * erodeSpeed,
+                                   maxErosion);
+            heightmap[d.pos] -= erode;
+            d.sediment       += erode;
+        }
+        d.pos  += glm::normalize(d.vel);
+        d.water *= (1.0f - evaporateSpeed);
+        if (d.water &lt; 0.01f) break;
+    }
+}</code></pre>
+
+        <h2>Thermal Erosion</h2>
+        <p>
+            Thermal erosion redistributes material from steep slopes to flat areas. For each cell,
+            if the height difference to any neighbour exceeds the <em>talus angle</em> threshold,
+            material is transferred downhill. This rounds off vertical cliffs and produces
+            scree slopes at the base of steep terrain.
+        </p>
+
+        <h2>Vegetation Billboards</h2>
+        <p>
+            After terrain generation, random positions within each chunk are tested against a
+            height and slope filter. Positions below the tree line and on gentle slopes receive
+            a <code>BillboardComponent</code> entity. The billboard vertex shader computes the
+            screen-facing orientation from the view matrix right and up vectors per vertex —
+            no CPU sort is needed:
+        </p>
+        <pre><code>// In the billboard vertex shader
+vec3 right = vec3(view[0][0], view[1][0], view[2][0]); // view matrix right
+vec3 up    = vec3(0.0, 1.0, 0.0);                      // world up (no tilt)
+
+vec3 worldPos = center
+    + right * localPos.x * scale
+    + up    * localPos.y * scale;</code></pre>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Full terrain scene with vegetation</strong>
+            Exterior terrain scene showing rolling hills with hydraulic erosion channels,
+            camera-facing tree billboards on the slopes, and the skybox in the background.
+            Editor camera POV from slightly above.
+        </div>
+
+        <h2>Infinite Terrain Mode</h2>
+        <p>
+            In infinite mode, the system tracks the camera's chunk coordinates. Every frame, chunks
+            within the view radius that don't yet exist are generated (dispatched to the job system
+            as background tasks), and chunks that have left the radius are destroyed and freed.
+            Because the height function is purely position-based (no grid snapping), newly generated
+            chunks seamlessly continue the existing terrain with no visible seam.
+        </p>
+    </article>
+
+    <footer>
+        <p>&copy; 2026 GHost Engine · <a href="../about.html">Hugo Franc&eacute;s &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

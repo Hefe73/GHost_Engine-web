@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ECS Architecture – GHost Engine</title>
+    <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="../index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="../about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Posts ▾</a>
+                <div class="dropdown-menu">
+                    <a href="lua-scripting.html">Lua Scripting</a>
+                    <a href="terrain.html">Procedural Terrain</a>
+                    <a href="lod-streaming.html">LOD &amp; Streaming</a>
+                    <a href="hdr-tonemapping.html">HDR &amp; Tonemapping</a>
+                    <a href="csm.html">Cascaded Shadow Maps</a>
+                    <a href="deferred-rendering.html">Deferred Rendering</a>
+                    <a href="ecs.html">ECS Architecture</a>
+                </div>
+            </li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="https://github.com/boscab/3PMG_2526_boscaba_franceshe" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="../contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <article>
+        <h1>ECS Architecture: Entities, Components &amp; Systems</h1>
+        <p class="meta">Posted on March 28, 2026 &middot; Tags: ecs &middot; architecture &middot; c++20 &middot; engine</p>
+
+        <p>
+            GHost Engine's game-object model is built on a classic Entity-Component-System (ECS) pattern.
+            Rather than deep inheritance hierarchies, every object in the world is a lightweight integer ID
+            (the <em>entity</em>) with data attached through independent <em>component managers</em>.
+            This separation keeps memory access patterns cache-friendly and makes it trivial to add new
+            behaviour without touching existing code.
+        </p>
+
+        <h2>Generational Entity IDs</h2>
+        <p>
+            An <code>Entity</code> is a 32-bit unsigned integer split into two fields:
+            <strong>24 bits of index</strong> and <strong>8 bits of generation</strong>.
+            The generation counter solves the classic "dangling handle" problem: when an entity is
+            destroyed and its slot recycled, the generation increments. Any old handle that still
+            holds the previous generation will be rejected by <code>EntityManager::alive()</code>.
+        </p>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Entity ID bit layout</strong>
+            Diagram showing the 32-bit word: bits 31–8 = index (24 bits), bits 7–0 = generation (8 bits)
+        </div>
+
+        <pre><code>// From gh_entity.h
+struct Entity
+{
+    uint32_t id = 0;
+
+    uint32_t index()      const { return id &amp; ENTITY_INDEX_MASK; }
+    uint32_t generation() const { return (id >> ENTITY_INDEX_BITS) &amp; ENTITY_GENERATION_MASK; }
+
+    bool isNil()                       const { return id == 0; }
+    bool operator==(const Entity&amp; e)   const { return id == e.id; }
+};</code></pre>
+
+        <p>
+            <code>EntityManager::create()</code> either recycles a slot from the free list or appends
+            a new one. <code>destroy(e)</code> increments the slot's generation and pushes the index
+            back onto a <code>std::deque</code>, ready for reuse.
+        </p>
+
+        <h2>Component Managers (SoA Layout)</h2>
+        <p>
+            Each component type is owned by a dedicated manager that stores data in a contiguous
+            <code>std::vector</code> — one array per field (Structure of Arrays). When a system
+            iterates over a single component type (e.g. all positions for frustum culling), it
+            touches only that field's memory, keeping the CPU cache hot.
+        </p>
+        <p>
+            The <code>Scene</code> class owns all component managers directly:
+        </p>
+
+        <pre><code>// From gh_scene.h — Scene component managers
+TransformComponentECS  TransformComp;
+MeshComponent          MeshComp;
+TextureComponent       TextureComp;
+BillboardComponent     BillboardComp;
+SoundComponent         SoundComp;
+LightComponent         LightComp;
+DebugNameComponent     DebugNameComp;
+ScriptComponent        ScriptComp;</code></pre>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: SoA vs AoS comparison diagram</strong>
+            Left: AoS — array of structs [{pos,rot,scale}, {pos,rot,scale}, ...] with interleaved cache misses.
+            Right: SoA — three separate contiguous arrays [pos[], rot[], scale[]] with cache-friendly access.
+        </div>
+
+        <h2>Creating and Using Entities</h2>
+        <p>
+            Entities are created through the <code>Scene</code> API. Components are attached via the
+            corresponding manager. Destroying an entity automatically marks it as dead; the slot is
+            recycled when the free list grows past 1024 entries.
+        </p>
+
+        <pre><code>// Create an entity and attach components
+gh::Entity e = scene->AddEntity();
+
+// Attach a debug name
+scene->DebugNameComp.setName(e, "Player");
+
+// Attach a transform (position, rotation, scale)
+scene->TransformComp.setPosition(e, { 0.f, 1.f, 0.f });
+scene->TransformComp.setScale(e, { 1.f, 1.f, 1.f });
+
+// Attach a mesh
+scene->MeshComp.setModel(e, myModel);
+
+// Attach a Lua script
+scene->ScriptComp.setScript(e, "assets/scripts/player.lua");
+
+// Remove the entity later
+scene->RemoveEntity(e);</code></pre>
+
+        <h2>Transform Hierarchy</h2>
+        <p>
+            <code>TransformComponentECS</code> supports parent-child relationships through a
+            <code>parentID</code> field stored per entity. <code>getWorldMatrix(entity)</code>
+            walks up the parent chain, multiplying local matrices together. World matrices are
+            cached with a dirty flag so they are only recomputed when a transform actually changes.
+        </p>
+
+        <pre><code>// Attach a child to a parent
+scene->TransformComp.setParent(child, parent);
+
+// World matrix is computed lazily — cache invalidated when any ancestor moves
+glm::mat4 world = scene->TransformComp.getWorldMatrix(child);</code></pre>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Transform hierarchy in the editor Hierarchy panel</strong>
+            Screenshot of the ImGui hierarchy panel showing a parent entity with two children
+            indented beneath it, with expand/collapse arrows.
+        </div>
+
+        <h2>SceneState: Play / Pause / Stop</h2>
+        <p>
+            <code>Scene</code> tracks an execution state through the <code>SceneState</code> enum:
+        </p>
+        <pre><code>enum class SceneState { Stopped, Playing, Paused };</code></pre>
+        <p>
+            Calling <code>scene->Play()</code> serialises the current scene to a temp file, then
+            reloads it fresh and starts script execution. <code>Pause()</code> freezes script
+            updates but keeps rendering active. <code>Stop()</code> reloads the temp file to
+            restore the exact pre-play state — identical to the Unity Play/Stop workflow.
+        </p>
+
+        <h2>DebugName and Editor Integration</h2>
+        <p>
+            <code>DebugNameComponent</code> stores a human-readable string per entity. The editor
+            hierarchy panel uses these names for display, and the Lua scripting system exposes named
+            entities as Lua globals so scripts can reference other objects by name without manual lookup:
+        </p>
+        <pre><code>-- In player.lua: reference another named entity directly
+local door = find("Door")
+door.transform.translate(0, 0, 1)</code></pre>
+
+        <h2>Key Takeaways</h2>
+        <ul>
+            <li><strong>Generational IDs</strong> prevent dangling handle bugs without garbage collection.</li>
+            <li><strong>SoA component managers</strong> keep per-component iteration cache-friendly.</li>
+            <li><strong>Dirty-flag caching</strong> on world matrices avoids redundant matrix multiply chains.</li>
+            <li><strong>ScriptComponent</strong> bridges the ECS and Lua layers with zero engine recompilation.</li>
+        </ul>
+    </article>
+
+    <footer>
+        <p>&copy; 2026 GHost Engine · <a href="../about.html">Hugo Franc&eacute;s &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

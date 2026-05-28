@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deferred Rendering – GHost Engine</title>
+    <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="../index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="../about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Posts ▾</a>
+                <div class="dropdown-menu">
+                    <a href="lua-scripting.html">Lua Scripting</a>
+                    <a href="terrain.html">Procedural Terrain</a>
+                    <a href="lod-streaming.html">LOD &amp; Streaming</a>
+                    <a href="hdr-tonemapping.html">HDR &amp; Tonemapping</a>
+                    <a href="csm.html">Cascaded Shadow Maps</a>
+                    <a href="deferred-rendering.html">Deferred Rendering</a>
+                    <a href="ecs.html">ECS Architecture</a>
+                </div>
+            </li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="https://github.com/boscab/3PMG_2526_boscaba_franceshe" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="../contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <article>
+        <h1>Deferred Rendering &amp; Cook-Torrance BRDF</h1>
+        <p class="meta">Posted on April 10, 2026 &middot; Tags: deferred &middot; pbr &middot; gbuffer &middot; brdf &middot; vulkan</p>
+
+        <p>
+            GHost Engine uses a fully deferred shading pipeline. Instead of evaluating lighting for
+            every triangle during the geometry draw call, geometry is drawn once into a set of
+            intermediate textures (the <em>GBuffer</em>). A later full-screen pass then reads those
+            textures and evaluates lighting per pixel — regardless of how many lights are in the scene
+            or how complex the geometry is.
+        </p>
+        <p>
+            The cost model changes from <strong>O(triangles × lights)</strong> in forward rendering
+            to <strong>O(pixels × lights)</strong> in deferred — a significant saving for dynamic,
+            multi-light scenes.
+        </p>
+
+        <h2>The Four-Pass Frame</h2>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Full frame pipeline flowchart</strong>
+            Four boxes connected by arrows: Shadow Pass → GBuffer Pass → Lighting Pass → Post-Process Pass.
+            Each box lists its inputs and outputs (e.g. GBuffer Pass outputs albedo/normal/material/depth textures).
+        </div>
+
+        <h2>Pass 1 — Shadow Pass</h2>
+        <p>
+            Before any geometry is drawn for the final image, scene geometry is re-drawn from the
+            directional light's perspective into a depth-only shadow atlas. Ghost Engine uses
+            <a href="csm.html">Cascaded Shadow Maps</a> with three cascades at 2048×2048 each.
+            No colour attachments are active — the vertex shader outputs only <code>gl_Position</code>
+            in light space and the fragment shader is unused.
+        </p>
+        <p>
+            A pipeline barrier transitions the depth image from
+            <code>DEPTH_STENCIL_ATTACHMENT_OPTIMAL</code> to <code>SHADER_READ_ONLY_OPTIMAL</code>
+            before the lighting pass can sample it.
+        </p>
+
+        <h2>Pass 2 — GBuffer Fill</h2>
+        <p>
+            All opaque scene entities are drawn into four simultaneous render targets via a single
+            <code>VkRenderPass</code> with four colour attachments and one depth attachment.
+        </p>
+
+        <table style="width:100%;border-collapse:collapse;margin-bottom:1.4rem;font-size:0.88rem;">
+            <thead>
+                <tr style="background:#ececec;">
+                    <th style="padding:0.5rem 0.8rem;text-align:left;border:1px solid #ddd;">Attachment</th>
+                    <th style="padding:0.5rem 0.8rem;text-align:left;border:1px solid #ddd;">Format</th>
+                    <th style="padding:0.5rem 0.8rem;text-align:left;border:1px solid #ddd;">Content</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;">Albedo</td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>R8G8B8A8_SRGB</code></td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;">Base colour × tint</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;">Normal</td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>R16G16B16A16_SFLOAT</code></td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;">World-space normal (TBN-transformed)</td></tr>
+                <tr><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;">Material</td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>R8G8B8A8_UNORM</code></td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;">Metallic (R), Roughness (G), AO (B)</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;">Depth</td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>D32_SFLOAT</code></td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;">Hardware depth, reused for position reconstruction</td></tr>
+            </tbody>
+        </table>
+
+        <p>
+            Each draw call pushes the model matrix (64 bytes) and a material index (4 bytes) as push
+            constants. The fragment shader reads textures by integer index from the bindless descriptor
+            heap — no per-draw descriptor rebind is needed.
+        </p>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: GBuffer debug views side by side</strong>
+            Four panels in the editor viewport: Albedo (colour), Normals (purple-blue normal map),
+            Material (metallic/roughness packed), Depth (greyscale).
+        </div>
+
+        <h2>Pass 3 — Lighting (Cook-Torrance BRDF)</h2>
+        <p>
+            A single full-screen triangle (generated in the vertex shader from <code>gl_VertexIndex</code>,
+            no vertex buffer required) drives the lighting fragment shader. The shader:
+        </p>
+        <ol style="margin:0 0 1.3rem 1.5rem;line-height:1.8;color:#444;">
+            <li>Reads the four GBuffer textures.</li>
+            <li>Reconstructs world-space position from the depth buffer and the inverse view-projection matrix.</li>
+            <li>Iterates over all active GPU lights from the <code>GPULightData</code> UBO.</li>
+            <li>Evaluates the Cook-Torrance BRDF for each light.</li>
+            <li>Applies PCF-filtered shadow attenuation from the CSM atlas.</li>
+            <li>Writes the accumulated HDR radiance to a <code>R16G16B16A16_SFLOAT</code> target.</li>
+        </ol>
+
+        <h2>The Cook-Torrance BRDF</h2>
+        <p>
+            The reflectance equation implemented in the lighting shader:
+        </p>
+        <pre><code>// Lo = outgoing radiance at the fragment
+Lo += (kd * albedo/PI + ks * (D * F * G) / (4 * NdotV * NdotL))
+       * Li * NdotL * shadow;</code></pre>
+        <p>
+            Where:
+        </p>
+        <ul style="margin:0 0 1.3rem 1.5rem;line-height:1.8;color:#444;">
+            <li><code>D</code> — GGX Normal Distribution Function (controls highlight shape).</li>
+            <li><code>F</code> — Schlick Fresnel approximation (reflectance at grazing angles).</li>
+            <li><code>G</code> — Smith geometry function (micro-surface shadowing/masking).</li>
+            <li><code>kd</code> = <code>(1-F) * (1-metallic)</code> — diffuse energy fraction.</li>
+            <li><code>ks</code> = <code>F</code> — specular energy fraction.</li>
+            <li><code>Li</code> — light radiance, attenuated by distance for point/spot lights.</li>
+            <li><code>shadow</code> — PCF occlusion factor [0,1] from the shadow atlas.</li>
+        </ul>
+
+        <pre><code>// GGX Normal Distribution Function
+float ggx(float NdotH, float roughness) {
+    float a  = roughness * roughness;
+    float a2 = a * a;
+    float d  = NdotH * NdotH * (a2 - 1.0) + 1.0;
+    return a2 / (PI * d * d);
+}
+
+// Schlick Fresnel
+vec3 schlick(float VdotH, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
+}
+
+// Smith GGX Geometry
+float smithG1(float NdotX, float roughness) {
+    float k = roughness * roughness * 0.5;
+    return NdotX / (NdotX * (1.0 - k) + k);
+}
+float geometry(float NdotV, float NdotL, float roughness) {
+    return smithG1(NdotV, roughness) * smithG1(NdotL, roughness);
+}
+
+// Base reflectance: 0.04 for dielectrics, albedo for metals
+vec3 F0 = mix(vec3(0.04), albedo, metallic);</code></pre>
+
+        <p>
+            Position is reconstructed without a dedicated position GBuffer attachment, saving memory
+            bandwidth:
+        </p>
+        <pre><code>// Reconstruct world position from depth + inverse VP
+vec4 clipPos  = vec4(uv * 2.0 - 1.0, depth, 1.0);
+vec4 worldPos = invViewProj * clipPos;
+worldPos /= worldPos.w;  // perspective divide</code></pre>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Final lit scene — PBR materials with multiple light sources and shadows</strong>
+            Split view: left side shows the scene without shadows, right side with CSM shadows enabled,
+            demonstrating the shadow contribution on ground and walls.
+        </div>
+
+        <h2>Pass 4 — Post-Processing</h2>
+        <p>
+            The HDR colour attachment is consumed by the post-processing pass, which applies
+            exposure scaling, tonemapping (ACES by default), and gamma correction before presenting
+            to the swapchain. See the dedicated
+            <a href="hdr-tonemapping.html">HDR &amp; Tonemapping</a> post for details.
+        </p>
+
+        <h2>Why Deferred over Forward?</h2>
+        <p>
+            During development, a forward renderer was benchmarked with 8 dynamic lights against the
+            target scene complexity. Cost scaled as <em>O(triangles × lights)</em>; adding a fifth
+            light measurably reduced frame rate. Deferred rendering moved the lighting cost to a
+            fixed-size screen-space pass — adding more lights only adds cost in the lighting pass,
+            not in the geometry pass. For scenes with many simultaneous dynamic lights, this is a
+            decisive advantage.
+        </p>
+    </article>
+
+    <footer>
+        <p>&copy; 2026 GHost Engine · <a href="../about.html">Hugo Franc&eacute;s &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

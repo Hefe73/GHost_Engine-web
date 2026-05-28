@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -13,27 +13,56 @@
         <ul class="nav-links">
             <li><a href="about.html">About Us</a></li>
             <li class="dropdown">
+                <a href="#">Posts ▾</a>
+                <div class="dropdown-menu">
+                    <a href="posts/lua-scripting.html">Lua Scripting</a>
+                    <a href="posts/terrain.html">Procedural Terrain</a>
+                    <a href="posts/lod-streaming.html">LOD &amp; Streaming</a>
+                    <a href="posts/hdr-tonemapping.html">HDR &amp; Tonemapping</a>
+                    <a href="posts/csm.html">Cascaded Shadow Maps</a>
+                    <a href="posts/deferred-rendering.html">Deferred Rendering</a>
+                    <a href="posts/ecs.html">ECS Architecture</a>
+                    <a href="posts/renderpass.html">Render Passes</a>
+                    <a href="posts/vulkan-init.html">Vulkan Init</a>
+                </div>
+            </li>
+            <li class="dropdown">
                 <a href="#">Resources ▾</a>
                 <div class="dropdown-menu">
-                    <a href="posts/vulkan-init.html">Vulkan Init</a>
-                    <a href="https://github.com/TU_USUARIO/ghost-engine" target="_blank">GitHub</a>
+                    <a href="https://github.com/boscab/3PMG_2526_boscaba_franceshe" target="_blank">GitHub</a>
+                    <a href="about.html">About the Engine</a>
                 </div>
             </li>
             <li><a href="contact.html">Contact Us</a></li>
         </ul>
     </nav>
 
+    <!-- Sidebar -->
     <div class="goals-section">
         <div class="goals-container">
             <h2>Upcoming Goals</h2>
             <ul class="goals-list">
-                <li>Update to Vulkan latest version</li>
-                <li>Advanced Lighting</li>
-                <li>Physics Engine Integration</li>
+                <li>Physics engine integration</li>
+                <li>Screen-Space AO (SSAO)</li>
+                <li>Temporal Anti-Aliasing (TAA)</li>
+                <li>Mesh LOD simplification</li>
+                <li>Scripting: physics &amp; sound API</li>
+            </ul>
+            <p class="goals-list-label">Recently shipped</p>
+            <ul class="goals-list">
+                <li class="done">Cascaded Shadow Maps</li>
+                <li class="done">HDR + ACES tonemapping</li>
+                <li class="done">Deferred rendering pipeline</li>
+                <li class="done">Procedural terrain + erosion</li>
+                <li class="done">LOD streaming system</li>
+                <li class="done">Lua scripting via Sol2</li>
+                <li class="done">BranchingSound music graph</li>
+                <li class="done">ImGui editor + dual viewport</li>
             </ul>
         </div>
     </div>
 
+    <!-- Hero -->
     <div class="site-header">
         <div class="logo-circle">
             <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
@@ -44,14 +73,107 @@
         </div>
         <h1 class="site-title">GHost Engine</h1>
         <div class="header-divider"></div>
-        <p class="site-subtitle">Vulkan Graphics Engine</p>
+        <p class="site-subtitle">Vulkan 1.3 · C++20 · Real-Time 3D Engine</p>
     </div>
 
     <main>
+
+        <!-- POST: Lua Scripting -->
         <div class="post">
             <div class="post-content">
-                <h2><a href="posts/vulkan-init.html">Lets set up a default Scene on GHost Engine!</a></h2>
-                <p class="excerpt">Setting up a window, physical device selection and logical device creation.</p>
+                <h2><a href="posts/lua-scripting.html">Lua Scripting via Sol2</a></h2>
+                <p class="excerpt">How GHost Engine embeds Lua 5.4 with Sol2: binding C++ types, exposing the Transform/Input API, and hot-reloading scripts at runtime.</p>
+                <p class="date">Posted on May 20, 2026</p>
+                <p class="read-more">Deep dive into the scripting layer <a href="posts/lua-scripting.html">[Read More]</a></p>
+                <p class="tags">Tags: <span>lua</span><span>sol2</span><span>scripting</span><span>ecs</span></p>
+            </div>
+            <img src="images/lua_scripting.png" alt="Lua scripting in Ghost Engine" class="post-image"
+                 onerror="this.style.display='none'">
+        </div>
+
+        <!-- POST: Procedural Terrain -->
+        <div class="post">
+            <div class="post-content">
+                <h2><a href="posts/terrain.html">Procedural Terrain: fBm, Erosion &amp; Vegetation</a></h2>
+                <p class="excerpt">Generating infinite chunked terrain with fractional Brownian motion, domain warping, hydraulic erosion simulation, and camera-facing vegetation billboards.</p>
+                <p class="date">Posted on May 15, 2026</p>
+                <p class="read-more">See how the terrain is built <a href="posts/terrain.html">[Read More]</a></p>
+                <p class="tags">Tags: <span>terrain</span><span>procedural</span><span>noise</span><span>erosion</span></p>
+            </div>
+            <img src="images/terrain.png" alt="Procedural terrain" class="post-image"
+                 onerror="this.style.display='none'">
+        </div>
+
+        <!-- POST: LOD & Streaming -->
+        <div class="post">
+            <div class="post-content">
+                <h2><a href="posts/lod-streaming.html">LOD Streaming &amp; Frustum Culling</a></h2>
+                <p class="excerpt">Distance-based texture mip streaming across 5 LOD bands, a priority multiplier system based on mesh AABB size, and six-plane frustum culling to skip off-screen geometry entirely.</p>
+                <p class="date">Posted on May 10, 2026</p>
+                <p class="read-more">How we keep the frame budget under control <a href="posts/lod-streaming.html">[Read More]</a></p>
+                <p class="tags">Tags: <span>lod</span><span>streaming</span><span>frustum</span><span>performance</span></p>
+            </div>
+            <img src="images/lod_streaming.png" alt="LOD streaming" class="post-image"
+                 onerror="this.style.display='none'">
+        </div>
+
+        <!-- POST: HDR & Tonemapping -->
+        <div class="post">
+            <div class="post-content">
+                <h2><a href="posts/hdr-tonemapping.html">HDR Pipeline &amp; Tonemapping (ACES / Hable)</a></h2>
+                <p class="excerpt">Rendering to a 16-bit float HDR target and converting to display-ready output with three selectable tonemapping curves: linear clamp, ACES filmic, and Hable (Uncharted 2).</p>
+                <p class="date">Posted on May 5, 2026</p>
+                <p class="read-more">HDR tonemapping explained <a href="posts/hdr-tonemapping.html">[Read More]</a></p>
+                <p class="tags">Tags: <span>hdr</span><span>aces</span><span>tonemapping</span><span>postprocess</span></p>
+            </div>
+            <img src="images/hdr_tonemapping.png" alt="HDR tonemapping" class="post-image"
+                 onerror="this.style.display='none'">
+        </div>
+
+        <!-- POST: CSM -->
+        <div class="post">
+            <div class="post-content">
+                <h2><a href="posts/csm.html">Cascaded Shadow Maps (CSM)</a></h2>
+                <p class="excerpt">Three-cascade directional shadow mapping at 2048×2048 per cascade, logarithmic/linear split blending, per-cascade light-space matrices, and PCF filtering via a Vulkan comparison sampler.</p>
+                <p class="date">Posted on April 25, 2026</p>
+                <p class="read-more">How CSM works in Ghost Engine <a href="posts/csm.html">[Read More]</a></p>
+                <p class="tags">Tags: <span>shadows</span><span>csm</span><span>vulkan</span><span>depth</span></p>
+            </div>
+            <img src="images/csm_shadows.png" alt="Cascaded Shadow Maps" class="post-image"
+                 onerror="this.style.display='none'">
+        </div>
+
+        <!-- POST: Deferred Rendering -->
+        <div class="post">
+            <div class="post-content">
+                <h2><a href="posts/deferred-rendering.html">Deferred Rendering &amp; Cook-Torrance BRDF</a></h2>
+                <p class="excerpt">The four-pass rendering pipeline: shadow pass, GBuffer fill (albedo/normal/material/depth), full-screen lighting with physically-based Cook-Torrance BRDF, and HDR post-process.</p>
+                <p class="date">Posted on April 10, 2026</p>
+                <p class="read-more">The full rendering pipeline breakdown <a href="posts/deferred-rendering.html">[Read More]</a></p>
+                <p class="tags">Tags: <span>deferred</span><span>pbr</span><span>gbuffer</span><span>brdf</span></p>
+            </div>
+            <img src="images/deferred_gbuffer.png" alt="Deferred rendering GBuffer" class="post-image"
+                 onerror="this.style.display='none'">
+        </div>
+
+        <!-- POST: ECS -->
+        <div class="post">
+            <div class="post-content">
+                <h2><a href="posts/ecs.html">ECS Architecture: Entities, Components &amp; Systems</a></h2>
+                <p class="excerpt">Generational 32-bit entity IDs, SoA component managers, parent-child transform hierarchies, and the ScriptComponent that connects Lua scripts to the ECS layer.</p>
+                <p class="date">Posted on March 28, 2026</p>
+                <p class="read-more">How the ECS is structured <a href="posts/ecs.html">[Read More]</a></p>
+                <p class="tags">Tags: <span>ecs</span><span>architecture</span><span>c++20</span><span>engine</span></p>
+            </div>
+            <img src="images/ecs_diagram.png" alt="ECS architecture" class="post-image"
+                 onerror="this.style.display='none'">
+        </div>
+
+        <!-- POST: Vulkan Init (original) -->
+        <div class="post">
+            <div class="post-content">
+                <h2><a href="posts/vulkan-init.html">Setting Up a Scene in GHost Engine</a></h2>
+                <p class="excerpt">Setting up a window, physical device selection and logical device creation — the very first steps of the engine.</p>
                 <p class="date">Posted on March 2, 2026</p>
                 <p class="read-more">GHostEngine setup walkthrough <a href="posts/vulkan-init.html">[Read More]</a></p>
                 <p class="tags">Tags: <span>initialization</span><span>device</span><span>instance</span></p>
@@ -59,44 +181,22 @@
             <img src="images/default_GHostEngine.png" alt="Vulkan initialization" class="post-image">
         </div>
 
+        <!-- POST: Render Passes (original) -->
         <div class="post">
             <div class="post-content">
                 <h2><a href="posts/renderpass.html">Render Passes &amp; Framebuffers</a></h2>
-                <p class="excerpt">How GHost Engine structures render passes, subpasses and framebuffer attachments.</p>
+                <p class="excerpt">How GHost Engine structures render passes, subpasses and framebuffer attachments in the Vulkan backend.</p>
                 <p class="date">Posted on February 15, 2025</p>
                 <p class="read-more">Render pipeline deep dive <a href="posts/renderpass.html">[Read More]</a></p>
                 <p class="tags">Tags: <span>renderpass</span><span>framebuffer</span><span>pipeline</span><span>vulkan</span></p>
             </div>
             <img src="images/rederpass.png" alt="Render passes" class="post-image">
         </div>
-<!---
-<div class="post">
-    <div class="post-content">
-        <h2><a href="posts/pbr.html">Physically Based Rendering in GHost Engine</a></h2>
-        <p class="excerpt">PBR implementation using metallic-roughness workflow under Vulkan.</p>
-        <p class="date">Posted on January 28, 2025</p>
-        <p class="read-more">PBR in Vulkan <a href="posts/pbr.html">[Read More]</a></p>
-        <p class="tags">Tags: <span>pbr</span><span>lighting</span><span>brdf</span><span>realistic</span></p>
-    </div>
-    <img src="images/pbr.png" alt="PBR rendering" class="post-image">
-</div>
 
-<div class="post">
-    <div class="post-content">
-        <h2><a href="posts/descriptors.html">Descriptor Sets &amp; Uniform Buffers</a></h2>
-        <p class="excerpt">Managing descriptor pools, layouts and binding resources efficiently in the engine.</p>
-        <p class="date">Posted on January 10, 2025</p>
-                <p class="read-more">Resource binding in Vulkan <a href="posts/descriptors.html">[Read More]</a></p>
-                <p class="tags">Tags: <span>descriptors</span><span>uniforms</span><span>vulkan</span><span>memory</span></p>
-            </div>
-            <img src="images/descriptors.png" alt="Descriptor sets" class="post-image">
-        </div>
-        
--->
     </main>
 
     <footer>
-        <p>&copy; 2025 GHost Engine · <a href="about.html">Hugo Francés &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
+        <p>&copy; 2026 GHost Engine · <a href="about.html">Hugo Franc&eacute;s &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
     </footer>
 
 </body>

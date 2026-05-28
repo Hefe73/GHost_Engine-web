@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HDR &amp; Tonemapping – GHost Engine</title>
+    <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="../index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="../about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Posts ▾</a>
+                <div class="dropdown-menu">
+                    <a href="lua-scripting.html">Lua Scripting</a>
+                    <a href="terrain.html">Procedural Terrain</a>
+                    <a href="lod-streaming.html">LOD &amp; Streaming</a>
+                    <a href="hdr-tonemapping.html">HDR &amp; Tonemapping</a>
+                    <a href="csm.html">Cascaded Shadow Maps</a>
+                    <a href="deferred-rendering.html">Deferred Rendering</a>
+                    <a href="ecs.html">ECS Architecture</a>
+                </div>
+            </li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="https://github.com/boscab/3PMG_2526_boscaba_franceshe" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="../contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <article>
+        <h1>HDR Pipeline &amp; Tonemapping (ACES / Hable)</h1>
+        <p class="meta">Posted on May 5, 2026 &middot; Tags: hdr &middot; aces &middot; tonemapping &middot; postprocess &middot; vulkan</p>
+
+        <p>
+            Physically-based lighting produces radiance values far above 1.0 — bright sunlight, specular
+            highlights, and emissive surfaces can reach hundreds of times the intensity of a mid-grey
+            surface. Storing this in an 8-bit render target would clip everything above 1.0,
+            destroying highlight detail. GHost Engine keeps the lighting pass output in a
+            <strong>16-bit float HDR target</strong> and maps it to the display range in a dedicated
+            post-processing pass.
+        </p>
+
+        <h2>HDR Render Target</h2>
+        <p>
+            The HDR format used throughout the engine is:
+        </p>
+        <pre><code>// From gh_postprocess.h
+static constexpr vk::Format HDR_FORMAT = vk::Format::eR16G16B16A16Sfloat;</code></pre>
+        <p>
+            16-bit float (half precision) per channel provides values from ~6×10⁻⁵ to ~65,504 —
+            more than enough for PBR lighting while using half the memory of 32-bit float.
+            Two independent HDR targets are maintained: <code>hdrImage</code> for the game viewport
+            and <code>hdrImageEditor</code> for the editor viewport, so both can render simultaneously
+            with different cameras.
+        </p>
+
+        <h2>PostProcessConfig</h2>
+        <p>
+            All post-processing parameters live in a plain struct that can be modified at any time
+            from the editor UI or from a Lua script — changes take effect on the very next frame:
+        </p>
+        <pre><code>struct PostProcessConfig {
+    ToneMappingMode toneMappingMode = ToneMappingMode::ACES; // default
+    float exposure = 1.0f;   // linear pre-multiplier before tonemapping
+    float gamma    = 2.2f;   // power applied after tonemapping (sRGB correction)
+};</code></pre>
+
+        <h2>Tonemapping Curves</h2>
+        <p>Three curves are selectable at runtime via the editor panel or Lua:</p>
+
+        <h2>Linear Clamp</h2>
+        <pre><code>// ToneMappingMode::Off
+vec3 tonemap(vec3 hdr) { return clamp(hdr, 0.0, 1.0); }</code></pre>
+        <p>
+            Simplest option: values above 1.0 clip hard. Useful for debugging (shows raw HDR
+            output) but produces blown-out highlights in outdoor scenes — not suitable for final
+            renders.
+        </p>
+
+        <h2>ACES Filmic (default)</h2>
+        <p>
+            The <strong>Academy Color Encoding System</strong> filmic curve was developed for the
+            film industry and has been adopted by Cyberpunk 2077, Horizon Zero Dawn, Final Fantasy XV,
+            and many others. GHost Engine uses the Narkowicz 2015 real-time approximation:
+        </p>
+        <pre><code>// ToneMappingMode::ACES
+vec3 ACESFilm(vec3 x) {
+    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}</code></pre>
+        <p>
+            It produces a gentle lift in shadows (natural shadow detail), a near-linear mid-tone,
+            and a soft roll-off in the highlights. The result closely matches the visual character
+            of photographic film.
+        </p>
+
+        <h2>Hable (Uncharted 2)</h2>
+        <pre><code>// ToneMappingMode::Hable
+vec3 hableOp(vec3 x) {
+    float A=0.15, B=0.50, C=0.10, D=0.20, E=0.02, F=0.30;
+    return ((x*(A*x+C*B)+D*E) / (x*(A*x+B)+D*F)) - E/F;
+}
+vec3 Hable(vec3 hdr) {
+    vec3 curr   = hableOp(hdr * 2.0);
+    vec3 whiteS = hableOp(vec3(11.2));
+    return curr / whiteS;
+}</code></pre>
+        <p>
+            The Hable curve (presented by John Hable at GDC 2010 for Uncharted 2) gives stronger
+            highlight compression and more saturated mid-tones — a high-contrast cinematic look
+            preferred for stylised or action game art styles.
+        </p>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Tonemapping comparison — three modes, same scene</strong>
+            Three side-by-side screenshots of the same outdoor scene:
+            Left — Linear (white sky, blown-out highlights),
+            Centre — ACES (natural roll-off, balanced),
+            Right — Hable (rich contrast, warm highlights).
+        </div>
+
+        <h2>Full Post-Processing Shader</h2>
+        <pre><code>layout(push_constant) uniform PC {
+    uint  mode;     // 0 = Off, 1 = ACES, 2 = Hable
+    float exposure;
+    float gamma;
+} pc;
+
+layout(set = 0, binding = 0) uniform sampler2D hdrInput;
+
+void main() {
+    vec3 hdr = texture(hdrInput, uv).rgb;
+
+    // 1. Exposure
+    hdr *= pc.exposure;
+
+    // 2. Tonemapping
+    vec3 ldr;
+    if      (pc.mode == 1) ldr = ACESFilm(hdr);
+    else if (pc.mode == 2) ldr = Hable(hdr);
+    else                   ldr = clamp(hdr, 0.0, 1.0);
+
+    // 3. Gamma correction (linear → sRGB)
+    fragColor = vec4(pow(ldr, vec3(1.0 / pc.gamma)), 1.0);
+}</code></pre>
+
+        <div class="img-placeholder img-placeholder-sm">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Post-processing editor panel</strong>
+            ImGui panel showing: Tonemapping dropdown (ACES selected), Exposure slider (1.0),
+            Gamma slider (2.2), with live preview in the game viewport behind it.
+        </div>
+
+        <h2>The Full-Screen Triangle Trick</h2>
+        <p>
+            The post-processing pass — like the lighting pass — uses a single triangle that covers
+            the entire screen. No vertex buffer is required. The vertex shader generates clip-space
+            coordinates from <code>gl_VertexIndex</code> alone:
+        </p>
+        <pre><code>// Vertex shader — generates a full-screen triangle from 3 vertices
+void main() {
+    vec2 positions[3] = vec2[](
+        vec2(-1.0, -1.0),
+        vec2( 3.0, -1.0),
+        vec2(-1.0,  3.0)
+    );
+    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+    uv = positions[gl_VertexIndex] * 0.5 + 0.5;
+}</code></pre>
+        <p>
+            Calling <code>vkCmdDraw(cmd, 3, 1, 0, 0)</code> draws the triangle without binding
+            any vertex buffers, slightly reducing driver overhead per full-screen pass.
+        </p>
+
+        <h2>Resize Handling</h2>
+        <p>
+            When the window is resized, <code>gh_postprocess::resize()</code> destroys and recreates
+            <code>hdrImage</code> and <code>hdrImageEditor</code> at the new extent, and updates the
+            descriptor sets that reference those image views. The tonemapping pipeline itself is
+            resolution-independent and does not need recreation.
+        </p>
+    </article>
+
+    <footer>
+        <p>&copy; 2026 GHost Engine · <a href="../about.html">Hugo Franc&eacute;s &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

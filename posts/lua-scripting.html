@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lua Scripting – GHost Engine</title>
+    <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+    <nav>
+        <a href="../index.html" class="nav-brand">GHost Engine</a>
+        <ul class="nav-links">
+            <li><a href="../about.html">About Us</a></li>
+            <li class="dropdown">
+                <a href="#">Posts ▾</a>
+                <div class="dropdown-menu">
+                    <a href="lua-scripting.html">Lua Scripting</a>
+                    <a href="terrain.html">Procedural Terrain</a>
+                    <a href="lod-streaming.html">LOD &amp; Streaming</a>
+                    <a href="hdr-tonemapping.html">HDR &amp; Tonemapping</a>
+                    <a href="csm.html">Cascaded Shadow Maps</a>
+                    <a href="deferred-rendering.html">Deferred Rendering</a>
+                    <a href="ecs.html">ECS Architecture</a>
+                </div>
+            </li>
+            <li class="dropdown">
+                <a href="#">Resources ▾</a>
+                <div class="dropdown-menu">
+                    <a href="https://github.com/boscab/3PMG_2526_boscaba_franceshe" target="_blank">GitHub</a>
+                </div>
+            </li>
+            <li><a href="../contact.html">Contact Us</a></li>
+        </ul>
+    </nav>
+
+    <article>
+        <h1>Lua Scripting via Sol2</h1>
+        <p class="meta">Posted on May 20, 2026 &middot; Tags: lua &middot; sol2 &middot; scripting &middot; ecs &middot; c++20</p>
+
+        <p>
+            One of the core requirements of the engine brief was user-authored game logic that runs
+            without recompiling the engine. GHost Engine meets this with an embedded
+            <strong>Lua 5.4</strong> interpreter managed by <strong>Sol2 3.3</strong> — a header-only
+            C++ binding library that provides zero-overhead, type-safe bridges between C++ classes
+            and Lua usertypes.
+        </p>
+        <p>
+            Lua was chosen over a custom scripting language because it is the de-facto scripting
+            language of the games industry (World of Warcraft, Roblox, CryEngine, and many others),
+            has a tiny runtime footprint (around 200 KB), and Sol2 makes the C++ binding almost
+            trivial to maintain.
+        </p>
+
+        <h2>Binding C++ Types to Lua</h2>
+        <p>
+            At engine initialisation, <code>GHScripting::init()</code> registers every exposed type
+            as a Sol2 usertype. Each method or property becomes a named member in Lua:
+        </p>
+        <pre><code>// Vec3 — registered as glm::vec3 proxy
+lua.new_usertype&lt;Vec3&gt;("Vec3",
+    sol::constructors&lt;Vec3(), Vec3(float,float,float)&gt;(),
+    "x",         &amp;Vec3::x,
+    "y",         &amp;Vec3::y,
+    "z",         &amp;Vec3::z,
+    "normalize", [](Vec3&amp; v){ return glm::normalize(v); },
+    "dot",       [](const Vec3&amp; a, const Vec3&amp; b){ return glm::dot(a,b); },
+    "length",    [](const Vec3&amp; v){ return glm::length(v); },
+    sol::meta_function::addition,       [](Vec3 a, Vec3 b){ return a+b; },
+    sol::meta_function::subtraction,    [](Vec3 a, Vec3 b){ return a-b; },
+    sol::meta_function::multiplication, [](Vec3 v, float s){ return v*s; }
+);</code></pre>
+
+        <pre><code>// Transform — read/write position, rotation, scale; translate helper
+lua.new_usertype&lt;TransformProxy&gt;("Transform",
+    "position",  sol::property(&amp;TransformProxy::getPos, &amp;TransformProxy::setPos),
+    "rotation",  sol::property(&amp;TransformProxy::getRot, &amp;TransformProxy::setRot),
+    "scale",     sol::property(&amp;TransformProxy::getScale, &amp;TransformProxy::setScale),
+    "translate", &amp;TransformProxy::translate
+);
+
+// Input — keyboard and mouse queries
+lua.new_usertype&lt;InputProxy&gt;("Input",
+    "isKeyDown",         &amp;InputProxy::isKeyDown,
+    "isMouseButtonDown", &amp;InputProxy::isMouseButtonDown,
+    "getMouseDelta",     &amp;InputProxy::getMouseDelta
+);
+
+// Light — colour, intensity, range
+lua.new_usertype&lt;LightProxy&gt;("Light",
+    "setColor",     &amp;LightProxy::setColor,
+    "setIntensity", &amp;LightProxy::setIntensity,
+    "setRange",     &amp;LightProxy::setRange
+);</code></pre>
+
+        <h2>The this Global and Named Entity Exposure</h2>
+        <p>
+            Before calling each entity's Lua <code>update(dt)</code> function, the scripting system
+            sets up two things:
+        </p>
+        <ol style="margin:0 0 1.3rem 1.5rem;line-height:1.8;color:#444;">
+            <li>
+                <code>this</code> — a Lua global pointing to the current entity's proxy, so the
+                script can access its own transform without any lookup.
+            </li>
+            <li>
+                Named entity globals — for every entity with a <code>DebugNameComponent</code>,
+                a Lua global is created using that name (e.g. <code>Player</code>, <code>Door</code>).
+                Scripts can reference other entities by name directly.
+            </li>
+        </ol>
+
+        <pre><code>// C++ side — before calling script update
+lua["this"] = entityProxy;
+
+// Expose all named entities as globals
+for (auto&amp; e : scene.entities) {
+    if (scene.DebugNameComp.has(e)) {
+        auto name = scene.DebugNameComp.getName(e);
+        lua[name] = makeEntityProxy(e, scene);
+    }
+}</code></pre>
+
+        <h2>Writing a Script</h2>
+        <p>
+            A Lua script attached via <code>ScriptComponent</code> must define an
+            <code>update(dt)</code> function. The engine calls it once per frame during
+            <code>Scene::update()</code>:
+        </p>
+        <pre><code>-- assets/scripts/player.lua
+
+local speed     = 5.0
+local turnSpeed = 2.0
+
+function update(dt)
+    -- Move forward/backward
+    if Input.isKeyDown("W") then
+        this.transform.translate(Vec3(0, 0, speed * dt))
+    end
+    if Input.isKeyDown("S") then
+        this.transform.translate(Vec3(0, 0, -speed * dt))
+    end
+
+    -- Rotate left/right
+    if Input.isKeyDown("A") then
+        local r = this.transform.rotation
+        this.transform.rotation = Vec3(r.x, r.y - turnSpeed * dt, r.z)
+    end
+    if Input.isKeyDown("D") then
+        local r = this.transform.rotation
+        this.transform.rotation = Vec3(r.x, r.y + turnSpeed * dt, r.z)
+    end
+end</code></pre>
+
+        <h2>Interacting with Other Entities</h2>
+        <p>
+            Because named entities are exposed as globals, any script can modify any other entity
+            without any explicit lookup API:
+        </p>
+        <pre><code>-- In enemy.lua — change a light entity's colour based on game state
+function update(dt)
+    if hp &lt; 20 then
+        -- WarningLight is the DebugName of a light entity in the scene
+        WarningLight.light.setColor(1.0, 0.0, 0.0)  -- red
+        WarningLight.light.setIntensity(3.0)
+    else
+        WarningLight.light.setColor(1.0, 1.0, 1.0)  -- white
+        WarningLight.light.setIntensity(1.0)
+    end
+end</code></pre>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Script hot-reload in the editor</strong>
+            Inspector panel showing a ScriptComponent with the .lua file path and a "Reload"
+            button. Scene is in Play mode, and the Lua file was just edited externally.
+        </div>
+
+        <h2>Hot-Reload</h2>
+        <p>
+            The inspector panel shows a <strong>Reload</strong> button for each
+            <code>ScriptComponent</code>. Clicking it calls <code>GHScripting::runScript(path)</code>
+            again, which re-executes the Lua file in the existing interpreter state — redefining
+            all functions including <code>update()</code>. The new behaviour takes effect on the
+            very next frame without stopping the scene or restarting the engine.
+        </p>
+
+        <h2>The Pacman Demo</h2>
+        <p>
+            The Pacman demo is the most complete example of the scripting system in practice.
+            The entire game — player movement, ghost AI, pellet collection, score tracking,
+            power-up logic, and game-over detection — is implemented exclusively in Lua scripts
+            attached to entities. Not a single line of C++ was written or modified for the game.
+            This validates the scripting API as a complete game development interface.
+        </p>
+
+        <div class="img-placeholder">
+            <span class="ph-icon">🖼</span>
+            <strong>IMAGE: Pacman demo gameplay screenshot</strong>
+            Top-down view of the 3D Pac-Man maze with the player character, four ghost enemies,
+            and remaining pellets. Score HUD visible at the top drawn via ImGui.
+        </div>
+
+        <h2>API Summary</h2>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:1.4rem;font-size:0.88rem;">
+            <thead>
+                <tr style="background:#ececec;">
+                    <th style="padding:0.5rem 0.8rem;text-align:left;border:1px solid #ddd;">Lua Type</th>
+                    <th style="padding:0.5rem 0.8rem;text-align:left;border:1px solid #ddd;">Key Members</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>Vec3</code></td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>x, y, z</code> · <code>normalize()</code> · <code>dot()</code> · <code>length()</code> · arithmetic operators</td></tr>
+                <tr style="background:#fafafa;"><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>this.transform</code></td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>position, rotation, scale</code> (Vec3) · <code>translate(Vec3)</code></td></tr>
+                <tr><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>Input</code></td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>isKeyDown(name)</code> · <code>isMouseButtonDown(btn)</code> · <code>getMouseDelta()</code></td></tr>
+                <tr style="background:#fafafa;"><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>entity.light</code></td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>setColor(r,g,b)</code> · <code>setIntensity(f)</code> · <code>setRange(f)</code></td></tr>
+                <tr><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>entity.debugname</code></td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>setName(s)</code> · <code>getName()</code></td></tr>
+                <tr style="background:#fafafa;"><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;"><code>dt</code> (global)</td><td style="padding:0.45rem 0.8rem;border:1px solid #ddd;">Frame delta time in seconds, passed to <code>update(dt)</code></td></tr>
+            </tbody>
+        </table>
+    </article>
+
+    <footer>
+        <p>&copy; 2026 GHost Engine · <a href="../about.html">Hugo Franc&eacute;s &amp; Guillermo Bosca</a> · Hosted on GitHub Pages</p>
+    </footer>
+
+</body>
+</html>

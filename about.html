@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -13,10 +13,21 @@
         <ul class="nav-links">
             <li><a href="about.html">About Us</a></li>
             <li class="dropdown">
+                <a href="#">Posts ▾</a>
+                <div class="dropdown-menu">
+                    <a href="posts/lua-scripting.html">Lua Scripting</a>
+                    <a href="posts/terrain.html">Procedural Terrain</a>
+                    <a href="posts/lod-streaming.html">LOD &amp; Streaming</a>
+                    <a href="posts/hdr-tonemapping.html">HDR &amp; Tonemapping</a>
+                    <a href="posts/csm.html">Cascaded Shadow Maps</a>
+                    <a href="posts/deferred-rendering.html">Deferred Rendering</a>
+                    <a href="posts/ecs.html">ECS Architecture</a>
+                </div>
+            </li>
+            <li class="dropdown">
                 <a href="#">Resources ▾</a>
                 <div class="dropdown-menu">
-                    <a href="posts/vulkan-init.html">Documentation</a>
-                    <a href="https://github.com/TU_USUARIO/ghost-engine" target="_blank">GitHub</a>
+                    <a href="https://github.com/boscab/3PMG_2526_boscaba_franceshe" target="_blank">GitHub</a>
                 </div>
             </li>
             <li><a href="contact.html">Contact Us</a></li>
@@ -32,49 +43,81 @@
     <div class="team-grid">
         <div class="team-card">
             <div class="team-avatar">HF</div>
-            <h3>Hugo Francés</h3>
-            <p>Graphics programmer. Handles the Vulkan backend, render pipeline and shader systems.</p>
+            <h3>Hugo Franc&eacute;s Herrero</h3>
+            <p>Graphics programmer. Vulkan backend, deferred rendering pipeline, shadow mapping, HDR post-processing, and LOD streaming.</p>
             <br />
-            <a href="https://github.com/TU_USUARIO" target="_blank">github.com/hugofranses</a>
+            <a href="https://github.com/hugofranses" target="_blank">github.com/hugofranses</a>
         </div>
         <div class="team-card">
             <div class="team-avatar">GB</div>
-            <h3>Guillermo Bosca</h3>
-            <p>Engine programmer. Responsible for the scene graph, memory management and tooling.</p>
+            <h3>Guillermo Bosca Ballester</h3>
+            <p>Engine programmer. ECS architecture, scene serialization, Lua scripting system, procedural terrain, audio system, and editor tooling.</p>
             <br />
-            <a href="https://github.com/TU_USUARIO2" target="_blank">github.com/guillebosca</a>
+            <a href="https://github.com/guillebosca" target="_blank">github.com/guillebosca</a>
         </div>
     </div>
 
     <div class="about-section">
         <h2>What is GHost Engine?</h2>
         <p>
-            GHost Engine is a custom real-time 3D graphics engine built from scratch in C++ using the
-            Vulkan API. It started as a learning project and has grown into a fully functional rendering
-            framework covering modern techniques used in production games and simulations.
+            GHost Engine is a custom real-time 3D graphics engine built from scratch in C++20 using Vulkan 1.3.
+            It started as an academic project at ESAT (Unit 46: Advanced Rendering and Visualization, 2025/2026)
+            and has grown into a complete rendering framework covering techniques used in modern production games.
         </p>
         <p>
-            The engine is open source and hosted on GitHub Pages, where we document our progress,
-            techniques and findings as we build it.
+            The engine ships as a <strong>static library</strong>. User code only includes <code>ghost.h</code>
+            — it never touches Vulkan, GLFW, or OpenAL headers directly. A suite of eleven demo executables
+            (from a basic triangle up to a playable Pac-Man game built entirely in Lua) validate the API and
+            showcase the rendering quality.
+        </p>
+        <p>
+            Build system: <strong>Premake5</strong> (Visual Studio 2022). Dependency management: <strong>Conan 2</strong>.
+            The project targets zero warnings at <code>/W4 /WX</code> with full RAII resource management.
         </p>
 
-        <h2>Features</h2>
+        <h2>Engine Features</h2>
         <ul class="feature-list">
-            <li>Vulkan 1.3 backend</li>
-            <li>Physically Based Rendering</li>
-            <li>Deferred + Forward rendering</li>
-            <li>Image-Based Lighting</li>
-            <li>Shadow mapping (PCF)</li>
-            <li>glTF 2.0 asset loading</li>
-            <li>Async compute passes</li>
-            <li>Descriptor set caching</li>
-            <li>Hot-reload shaders</li>
-            <li>Custom memory allocator</li>
+            <li>Vulkan 1.3 backend (RAII HPP)</li>
+            <li>Deferred rendering pipeline</li>
+            <li>Cook-Torrance PBR BRDF</li>
+            <li>Cascaded Shadow Maps (3 cascades)</li>
+            <li>Spot &amp; point light shadows</li>
+            <li>HDR + ACES / Hable tonemapping</li>
+            <li>Bindless texture descriptor heap</li>
+            <li>VulkanMemoryAllocator (VMA)</li>
+            <li>ECS with generational entity IDs</li>
+            <li>Parent-child transform hierarchy</li>
+            <li>Lua 5.4 scripting via Sol2</li>
+            <li>GHJobSystem thread pool (C++20)</li>
+            <li>5-band LOD streaming system</li>
+            <li>AABB frustum culling</li>
+            <li>Procedural terrain (fBm + erosion)</li>
+            <li>Infinite terrain chunk streaming</li>
+            <li>OpenAL Soft 3D spatial audio</li>
+            <li>BranchingSound adaptive music</li>
+            <li>ImGui editor + dual viewport</li>
+            <li>Scene serialization (.ghscene JSON)</li>
+            <li>Play / Pause / Stop workflow</li>
+            <li>CPU/GPU profiler (UDP stream)</li>
         </ul>
+
+        <h2>Architecture Overview</h2>
+        <p>
+            The renderer implements four passes each frame: a <strong>shadow pass</strong> that fills the
+            cascaded shadow atlas, a <strong>GBuffer pass</strong> that writes albedo, world-space normal,
+            packed material data, and depth, a full-screen <strong>lighting pass</strong> that evaluates
+            the Cook-Torrance BRDF for each active light, and a <strong>post-processing pass</strong> that
+            applies exposure scaling, tonemapping, and gamma correction.
+        </p>
+        <p>
+            The ECS layer uses 32-bit generational entity handles. Component data is stored in contiguous
+            vectors (SoA layout) for cache-friendly iteration. Lua scripts attach to entities via
+            <code>ScriptComponent</code> and receive a full Transform/Input/Light API through Sol2 bindings.
+        </p>
     </div>
 
     <footer>
-        <p>&copy; 2025 GHost Engine · Hugo Francés &amp; Guillermo Bosca · Hosted on GitHub Pages</p>
+        <p>&copy; 2026 GHost Engine · Hugo Franc&eacute;s &amp; Guillermo Bosca · Hosted on GitHub Pages</p>
     </footer>
 
 </body>
